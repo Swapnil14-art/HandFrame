@@ -1,595 +1,342 @@
-# HandFrame — Complete Project & Filter System Specification
+# HandFrame — Web-First Application & Filter System Specification
 
-**Document Version:** 2.0.0 (First-Class Filter Engine & Dual-Workflow Architecture)  
+**Document Version:** 3.0.0 (Web-First, Fullscreen Browser Architecture)  
 **Author:** Senior Software Architect & Computer Vision Engineer  
 **Status:** Approved Specification (Single Source of Truth)  
-**Target Platform:** Standalone Cross-platform Desktop (Windows, macOS, Linux)  
+**Target Platform:** Web Browsers (Desktop & Mobile Front/Rear Cameras)  
 
 ---
 
-## 1. PROJECT OVERVIEW
+## 1. EXECUTIVE SUMMARY & PLATFORM CHANGE
 
 ### 1.1 What HandFrame Is
-**HandFrame** is a real-time computer vision application that allows users to create a dynamic visual frame using their hands. By tracking four specific physical landmarks across both hands—specifically the left index fingertip, left thumb tip, right index fingertip, and right thumb tip—the application forms a dynamic quadrilateral region on the live camera stream. A modular visual filter is computed and rendered **exclusively inside this bounding region**, while the exterior background video stream remains untouched in real-time.
+**HandFrame** is a real-time, web-first computer vision application that allows users to create a dynamic visual frame using their hands. By tracking four specific physical hand landmarks—the left index fingertip, left thumb tip, right index fingertip, and right thumb tip—the system constructs a dynamic quadrilateral region on the camera stream. A modular visual filter is applied **exclusively inside this region**, while the exterior background video feed remains untouched.
 
-### 1.2 Problem & Core Concept
-Traditional photo and video filters are applied uniformly across an entire image frame or tracked rigidly around detected human faces. HandFrame introduces an intuitive, tactile form of spatial interaction: using physical hand gestures to define the spatial bounding box ("viewfinder") of an effect. The user directly controls the geometry, position, orientation, and scale of the filtered window using physical spatial interactions.
+### 1.2 Web-First Architectural Pivot
+HandFrame has transitioned from a desktop application (PySide6/Python) to a **web-first, browser-based application**. It delivers a zero-installation, instant-access, local-first camera experience directly in modern desktop and mobile browsers.
 
-### 1.3 How the Interaction Works
-1. **Startup Entry**: The application launches into a clean entry view offering two choices: **[ START CAMERA ]** to enter the framing experience, or **[ MANAGE FILTERS ]** to configure active filters and rotation order.
-2. **Framing**: The user brings both hands into the camera field of view, creating a natural framing box with their thumbs and index fingers.
-3. **Dynamic Masking**: The system tracks the 4 fingertips in real-time, calculates the quadrilateral region, extracts/crops the selected video region, passes it through the currently active filter module, and composites it back into the live output frame.
-4. **Touch-to-Switch Gesture**: Bringing all four tracked fingertips together into a tight cluster (a "pinch-all" gesture) emits an event that advances to the next enabled filter in the user's configured order, entering a lockout state until fingers separate.
+```
+[ STACK SPECIFICATION ]
+- Core Framework: React 18+
+- Language: TypeScript 5+
+- Build Tool: Vite
+- Styling: Tailwind CSS (with arbitrary values & safe-area utilities)
+- Hand Landmarker: MediaPipe Tasks Vision (@mediapipe/tasks-vision)
+- Camera Access: WebRTC navigator.mediaDevices.getUserMedia()
+- Image Processing & Compositing: HTML5 Canvas 2D Context / WebGL
+- Configuration Persistence: Browser LocalStorage
+```
 
-### 1.4 Main Use Cases
-- **Creative Media & Interactive Video**: Real-time performance art, dynamic video streaming, visual framing effects.
-- **Interactive Displays & Kiosks**: Touchless interaction in exhibitions or public demo stations.
-- **Educational CV Demonstration**: A modular architecture demonstrating landmark tracking, perspective transforms, image compositing, and decoupled filter engine design.
+### 1.3 Why Browser Local-First Processing Is Mandatory
+All video capture, hand tracking, coordinate geometry, filter application, and canvas compositing occur **100% locally in the user's browser runtime**.
 
-### 1.5 Explicit Non-Goals & Architectural Constraints
-To ensure high performance, low latency, offline operation, and reliability, HandFrame strictly enforces:
+- **Ultra-Low Latency**: Eliminates network round-trips to maintain 30–60 FPS real-time rendering.
+- **Privacy First**: Video streams and camera frames never leave the user's device memory.
+- **Zero Server Infrastructure**: Operates entirely client-side without cloud API costs or backend processing servers.
+- **Offline Reliability**: Executes offline once browser static assets and MediaPipe WASM bundles are cached.
 
+### 1.4 Explicit Architectural Non-Goals
 ```
 [ STRICT CONSTRAINTS CHECKLIST ]
-❌ NO Generative AI / LLMs / OpenAI API
-❌ NO TensorFlow / PyTorch / YOLO
+❌ NO Python / PySide6 / Desktop Native Wrappers
+❌ NO Backend Servers / Node API Dependencies
 ❌ NO Face/Identity/AR Filters (dog ears, makeup, face morphing)
-❌ NO Cloud Services or Network Dependencies
-❌ NO Web Application Frameworks / Electron
-❌ NO Unnecessary Third-Party Libraries
+❌ NO Cloud AI Services / OpenAI API / Generative AI
+❌ NO TensorFlow / PyTorch / YOLO Heavy ML Frameworks
 ```
-
-- **100% Offline-First**: Zero internet connectivity required during execution.
-- **Local Processing**: MediaPipe is used strictly for local hand landmark detection. All visual processing—region detection, masking, filters, compositing, and video processing—is performed locally using OpenCV and NumPy.
-- **Fixed Small Tech Stack**: **Python 3.11+ + OpenCV + MediaPipe + NumPy + PySide6 + PyInstaller**.
 
 ---
 
-## 2. FILTERS AS FIRST-CLASS INDEPENDENT MODULES
+## 2. FULLSCREEN CAMERA EXPERIENCE & UI/UX DIRECTION
 
-### 2.1 First-Class Architectural Mandate
-Filters in HandFrame are **first-class, completely independent modules**. The core application must **NEVER** contain filter-specific hardcoded branching or `if-elif` logic:
+### 2.1 Viewport Dominance (`100dvh`)
+The camera feed is the **primary hero experience** of HandFrame. When active, the camera view occupies the entire viewport across desktop and mobile devices without page scrolling.
 
-```python
-# ❌ FORBIDDEN IN HANDFRAME CORE:
-if active_filter == "grayscale":
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-elif active_filter == "sepia":
-    frame = apply_sepia(frame)
-```
+- **Desktop Viewport**: `100vw` × `100dvh` edge-to-edge canvas with floating, non-intrusive UI controls.
+- **Mobile Viewport**: Portrait-first, `100vw` × `100dvh` responsive viewport honoring device safe-area insets (`env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`).
+- **No Page Scroll**: `overflow: hidden` on root containers to prevent accidental mobile gesture scrolling or rubber-banding.
 
-Instead, the core system strictly operates via the polymorphic interface:
-```python
-# ✅ MANDATORY HANDFRAME CORE DESIGN:
-filtered_region = active_filter.apply(image_region)
-```
+### 2.2 Minimal, Premium Design Philosophy
+HandFrame follows an **Aesthetic + Minimal + Premium + Unobtrusive** visual design language:
+> **"Simple does not mean empty. The goal is a highly polished creative experience with very little UI."**
 
-### 2.2 System Decoupling Matrix
-The filter engine must be completely decoupled from all other subsystems:
+- **Camera as Hero**: The interface feels almost invisible during active framing. Controls float tastefully above the video canvas using subtle translucency (`backdrop-blur-md bg-black/40`), refined typography, and smooth micro-interactions.
+- **No SaaS Clutter**: Avoid dashboard layouts, excessive card panels, aggressive gradients, heavy borders, dense toolbars, or unnecessary icons.
+- **Auto-Hiding Controls**: Overlay controls subtly dim or hide after 3 seconds of inactivity and reappear on tap/hover/mouse move.
+- **Filter Change Toast**: When a gesture triggers a filter change, a minimal filter name label (e.g. `MOODY`) appears briefly at top-center and smoothly fades out over 1.2 seconds.
 
-| Subsystem | Decoupling Guarantee |
-|---|---|
-| **Camera Handling** | Filters never read from or control video capture devices. |
-| **Hand Tracking** | Filters receive image arrays; they do not know where hands or landmarks are. |
-| **Gesture Detection** | Gesture engines emit generic events (`FILTER_CHANGE_REQUESTED`); they do not reference filter names. |
-| **UI System** | UI elements query the filter registry for display metadata without executing filter internals. |
-| **Compositing** | Compositors place processed regions back into frames; filters only process cropped sub-regions. |
-| **Application Startup** | Startup code loads filter manifests dynamically via configuration without hardcoded imports. |
-
-### 2.3 Filter Scope & Processing Contract
-A HandFrame filter operates **strictly on the extracted sub-image region** inside the bounding quadrilateral:
+### 2.3 Comprehensive Coordinate Transformation System
+The application must dynamically transform coordinates across the processing pipeline:
 
 ```text
-Original Camera Frame
-        │
-        ├── Outside HandFrame  -> Unchanged
-        │
-        └── Inside HandFrame Region
-                 ↓
-          Cropped Bounding Region (np.ndarray: BGR uint8)
-                 ↓
-             active_filter.apply(region)
-                 ↓
-          Processed Region (np.ndarray: BGR uint8)
-                 ↓
-          Compositor (Alpha-Mask Blend into Frame)
+Camera Video Stream (Native Resolution W_cam x H_cam)
+                       ↓
+  Displayed HTML5 <video> Element (Object-fit Cover/Contain)
+                       ↓
+  Render Canvas (<canvas> W_canvas x H_canvas)
+                       ↓
+  MediaPipe Normalized Hand Landmarks (x_norm, y_norm ∈ [0.0, 1.0])
+                       ↓
+  HandFrame Quadrilateral Pixel Coordinates (P1, P2, P3, P4)
 ```
 
-### 2.4 Strict Scope Exclusion: What is NOT a HandFrame Filter
-HandFrame filters are **full-frame visual and image-processing effects**. They change the visual appearance, color grading, tone, texture, or optics of the region—NOT the identity or facial geometry of a person.
-
-The following are **EXPLICITLY OUT OF SCOPE**:
-- ❌ Face morphing, slimming, or eye enlargement
-- ❌ Dog ears, cat whiskers, or facial accessory overlays
-- ❌ Makeup, beard generation, or hair replacement
-- ❌ AR character models, 3D object tracking, or person transformations
+The transformation matrix must correctly handle:
+1. **Front-Facing Mirrored Cameras**: Horizontal flipping (`scaleX(-1)`) mapped seamlessly to canvas space.
+2. **Rear-Facing Mobile Cameras**: Standard non-mirrored coordinate mapping.
+3. **Aspect Ratio Discrepancies**: Letterboxing/cropping calculations (`object-fit: cover` vs `contain`).
+4. **Orientation Shifts**: Seamless recalculation when mobile devices rotate between portrait and landscape.
 
 ---
 
-## 3. UNIVERSAL FILTER SYSTEM ARCHITECTURE
+## 3. HANDFRAME CORE FUNCTIONALITY (PRESERVED)
 
-### 3.1 Common Universal Interface (`BaseFilter`)
-Every filter class must inherit from `BaseFilter` and implement `apply()`:
+### 3.1 4-Point Landmark Detection
+HandFrame isolates four specific fingertip landmarks from MediaPipe Tasks Vision (`HandLandmarker`):
 
-```python
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
-import numpy as np
-
-class BaseFilter(ABC):
-    """
-    Universal Abstract Base Class for all HandFrame visual filters.
-    """
-    def __init__(
-        self,
-        filter_id: str,
-        name: str,
-        description: str = "",
-        category: str = "General",
-        version: str = "1.0.0",
-        parameters: Optional[Dict[str, Any]] = None
-    ):
-        self.filter_id = filter_id
-        self.name = name
-        self.description = description
-        self.category = category
-        self.version = version
-        self.parameters = parameters or {}
-
-    @abstractmethod
-    def apply(self, image: np.ndarray) -> np.ndarray:
-        """
-        Processes an input sub-image region and returns the filtered output region.
-        
-        :param image: BGR uint8 numpy array of shape (H, W, 3)
-        :return: Processed BGR uint8 numpy array of exact shape (H, W, 3)
-        """
-        pass
-
-    def update_parameter(self, key: str, value: Any) -> None:
-        """Optional parameter tuning hook for dynamic adjustments."""
-        if key in self.parameters:
-            self.parameters[key] = value
+```
+       [Left Index Tip] (ID: 8)         [Right Index Tip] (ID: 8)
+                P1                              P2
+                 o------------------------------o
+                /                                \
+               /                                  \
+              /                                    \
+             o--------------------------------------o
+            P4                                      P3
+       [Left Thumb Tip] (ID: 4)         [Right Thumb Tip] (ID: 4)
 ```
 
-### 3.2 Filter Registry Manager (`FilterRegistry`)
-The central registry maintains installed filters, loads active filters from configuration, and handles rotation ordering:
+- **P1**: Left Hand Index Fingertip (`INDEX_FINGER_TIP`, ID: 8)
+- **P2**: Right Hand Index Fingertip (`INDEX_FINGER_TIP`, ID: 8)
+- **P3**: Right Hand Thumb Tip (`THUMB_TIP`, ID: 4)
+- **P4**: Left Hand Thumb Tip (`THUMB_TIP`, ID: 4)
 
-```python
-import logging
-from typing import List, Dict, Optional
-import numpy as np
-from handframe.filters.base_filter import BaseFilter
+### 3.2 Dynamic Quadrilateral Region
+- The 4 points form a dynamic polygon (quadrilateral).
+- The quad is **not assumed to be rectangular**; it tilts, scales, and warps as the user moves their hands.
+- The visual filter is calculated and rendered **strictly inside** this polygon.
+- Everything outside the polygon remains raw camera background.
 
-logger = logging.getLogger(__name__)
+### 3.3 Polygon Geometry Validation
+A quad region is valid for filtering if:
+1. **Convexity**: Adjacent edge cross-products share identical signs (non-self-intersecting).
+2. **Minimum Surface Area**: Surface area calculated via Shoelace formula exceeds threshold ($\ge 1200\text{ px}^2$ on 720p).
+3. **Interior Angles**: Angles remain between $20^\circ$ and $160^\circ$.
 
-class FilterRegistry:
-    """Manages available, enabled, and active visual filters."""
-    def __init__(self):
-        self._installed_filters: Dict[str, BaseFilter] = {}
-        self._enabled_ids: List[str] = []
-        self._active_index: int = 0
+---
 
-    def register(self, filter_instance: BaseFilter) -> None:
-        """Registers an installed filter instance."""
-        self._installed_filters[filter_instance.filter_id] = filter_instance
+## 4. GESTURE DETECTION STATE MACHINE (PRESERVED)
 
-    def set_enabled_filters(self, enabled_ids: List[str]) -> None:
-        """Sets active filter rotation list in deterministic order."""
-        valid_ids = [fid for fid in enabled_ids if fid in self._installed_filters]
-        if not valid_ids:
-            logger.warning("No valid enabled filter IDs found! Falling back to 'original'.")
-            valid_ids = ["original"] if "original" in self._installed_filters else list(self._installed_filters.keys())
-        
-        self._enabled_ids = valid_ids
-        self._active_index = 0
+### 4.1 Touch-Pinch Distance Metric
+When all four tracked fingertips converge into a tight cluster (a "four-point pinch"), the system triggers a filter switch.
 
-    def get_active_filter(self) -> BaseFilter:
-        """Returns currently selected active filter."""
-        if not self._enabled_ids:
-            raise RuntimeError("Filter registry contains no enabled filters!")
-        active_id = self._enabled_ids[self._active_index]
-        return self._installed_filters[active_id]
+The proximity metric evaluates the normalized maximum pairwise distance between all 6 point pairs:
+$$d_{\text{norm}} = \frac{\max_{i < j} \|P_i - P_j\|}{\sqrt{W_{\text{frame}}^2 + H_{\text{frame}}^2}}$$
 
-    def next_filter(self) -> BaseFilter:
-        """Advances to next enabled filter in deterministic rotation."""
-        if self._enabled_ids:
-            self._active_index = (self._active_index + 1) % len(self._enabled_ids)
-        return self.get_active_filter()
+- **Trigger Threshold ($T_{\text{trigger}}$)**: $d_{\text{norm}} < 0.045$ (fingertips touching).
+- **Release Threshold ($T_{\text{release}}$)**: $d_{\text{norm}} > 0.080$ (fingertips separated).
 
-    def previous_filter(self) -> BaseFilter:
-        """Rewinds to previous enabled filter in deterministic rotation."""
-        if self._enabled_ids:
-            self._active_index = (self._active_index - 1) % len(self._enabled_ids)
-        return self.get_active_filter()
+### 4.2 State Machine Lifecycle
+To prevent filter cycling while fingers remain together, the system enforces a debounced state machine:
 
-    def get_all_installed(self) -> List[BaseFilter]:
-        """Returns all registered filter instances."""
-        return list(self._installed_filters.values())
-
-    def get_enabled_ids(self) -> List[str]:
-        """Returns list of currently enabled filter IDs."""
-        return list(self._enabled_ids)
+```
+  +-------------------------------------------------------------------+
+  |                             READY                                 |
+  +---------------------------------+---------------------------------+
+                                    |
+                                    | d_norm < T_trigger (for 3 frames)
+                                    v
+  +-------------------------------------------------------------------+
+  |                           TRIGGERED                               |
+  |  - Advance filter index (next_filter)                             |
+  |  - Display subtle toast notification                              |
+  +---------------------------------+---------------------------------+
+                                    |
+                                    v
+  +-------------------------------------------------------------------+
+  |                      WAIT_FOR_SEPARATION                          |
+  |  - Filter switching LOCKED OUT                                    |
+  +---------------------------------+---------------------------------+
+                                    |
+                                    | d_norm > T_release
+                                    v
+  +-------------------------------------------------------------------+
+  |                             READY                                 |
+  +-------------------------------------------------------------------+
 ```
 
-### 3.3 Active Filter Configuration (`config/enabled_filters.json`)
-The active filter list and rotation order are configured in a human-readable JSON file, completely independent of core code:
+---
+
+## 5. FIRST-CLASS MODULAR FILTER SYSTEM ARCHITECTURE
+
+### 5.1 Universal Filter Interface
+Filters are first-class, independent modules. Core processing **NEVER** uses hardcoded branching (`if (filterId === 'moody')`).
+
+```typescript
+// src/filters/types/FilterTypes.ts
+export type FilterCategory = 'Basic' | 'Cinematic' | 'Film' | 'Retro' | 'Dreamy' | 'Creative' | 'Color';
+
+export interface FilterMetadata {
+  id: string;
+  name: string;
+  description: string;
+  category: FilterCategory;
+  version: string;
+  parameters?: Record<string, number | string | boolean>;
+}
+
+export interface BaseFilter extends FilterMetadata {
+  /**
+   * Applies the visual filter to a cropped sub-region image.
+   * @param imageData HTML5 Canvas ImageData object of the cropped bounding box.
+   * @returns Processed ImageData object of identical dimensions.
+   */
+  apply(imageData: ImageData): ImageData;
+}
+```
+
+### 5.2 Decoupled Module Architecture
+```text
+src/filters/
+├── types/
+│   └── FilterTypes.ts            # Common TypeScript interfaces
+├── registry/
+│   └── FilterRegistry.ts         # Central filter manager & active ordering
+├── presets/
+│   └── DefaultFilters.ts         # Filter manifest loader
+└── implementations/
+    ├── OriginalFilter.ts         # 1. Original (Baseline)
+    ├── MoodyFilter.ts            # 2. Moody Cinematic
+    ├── WarmFilter.ts             # 3. Warm Tone
+    ├── CoolFilter.ts             # 4. Cool Tone
+    ├── VintageFilmFilter.ts     # 5. Vintage Film
+    ├── FilmGrainFilter.ts       # 6. Film Grain
+    ├── DreamyBlurFilter.ts      # 7. Dreamy Blur
+    ├── CinematicFilter.ts        # 8. Teal & Orange Cinematic
+    ├── Y2kDigicamFilter.ts      # 9. Y2K Digicam
+    ├── VhsFilter.ts              # 10. VHS Retro Tape
+    ├── PixelateFilter.ts         # 11. Pixelated 8-Bit
+    ├── NegativeFilter.ts         # 12. Negative Invert
+    ├── GrayscaleFilter.ts        # 13. Grayscale
+    ├── SepiaFilter.ts            # 14. Sepia
+    └── RetroFlashFilter.ts      # 15. Retro Flash
+```
+
+### 5.3 Filter Scope & Strict Exclusions
+- **In Scope**: Color grading, contrast, saturation, film grain, vintage tones, scanlines, blur diffusion, pixelation, color offsets.
+- **Strictly Out of Scope**: Face morphing, dog ears, cat noses, eye enlargement, makeup overlays, facial accessories, AR identity modifications.
+
+---
+
+## 6. EDIT FILTERS EXPERIENCE & LOCAL STORAGE PERSISTENCE
+
+### 6.1 Dedicated Edit Filters Experience
+HandFrame provides a distinct **Edit Filters** management view separate from the camera:
+
+- **Enable / Disable Toggles**: Checkboxes to select which filters participate in gesture rotation. Disabled filters are skipped during camera usage.
+- **Deterministic Reordering**:
+  - **Desktop**: Drag-and-drop handles (`≡`) to reorder the rotation sequence.
+  - **Mobile**: Touch-friendly Move Up (`▲`) and Move Down (`▼`) buttons.
+- **Live Preview Canvas**: Renders selected filters in real-time onto a sample preview image using the exact filter implementation.
+- **Reset to Default**: One-tap button restoring default enabled filter list and sequence.
+
+### 6.2 Browser LocalStorage Schema
+User filter choices and ordering persist automatically across browser reloads:
 
 ```json
+// LocalStorage Key: "handframe_filter_config_v1"
 {
   "version": "1.0.0",
-  "enabled_filters": [
+  "enabledFilterIds": [
     "original",
     "moody",
-    "warm_film",
+    "warm",
     "vintage_film",
     "vhs",
     "dreamy_blur",
     "y2k_digicam",
-    "pixelate",
-    "cinematic",
-    "cool"
+    "pixelate"
   ]
 }
 ```
 
-### 3.4 Filter Crash Isolation & Error Handling
-If an individual filter throws an unhandled runtime exception during processing, the core system catches it, logs the failure, falls back safely to `OriginalFilter`, and keeps the camera stream running smoothly:
-
-```python
-def safe_apply_filter(active_filter: BaseFilter, region_img: np.ndarray, fallback_filter: BaseFilter) -> np.ndarray:
-    try:
-        output = active_filter.apply(region_img)
-        if output is None or output.shape != region_img.shape or output.dtype != np.uint8:
-            raise ValueError(f"Invalid output format from filter '{active_filter.filter_id}'")
-        return output
-    except Exception as e:
-        logger.error(f"Filter '{active_filter.filter_id}' failed during processing: {e}. Falling back to Original.")
-        return fallback_filter.apply(region_img)
-```
-
 ---
 
-## 4. FILTER ADDITION & REMOVAL WORKFLOWS
+## 7. COMPOSITING PIPELINE & PERFORMANCE OPTIMIZATION
 
-### 4.1 Step-by-Step Filter Addition Workflow
-Adding a brand-new filter requires **zero changes** to core processing, hand tracking, UI, or camera code.
-
-#### Step 1: Create Filter Module File
-Create `handframe/filters/custom_warmth_filter.py`:
-
-```python
-import cv2
-import numpy as np
-from handframe.filters.base_filter import BaseFilter
-
-class CustomWarmthFilter(BaseFilter):
-    def __init__(self):
-        super().__init__(
-            filter_id="custom_warmth",
-            name="Custom Warmth",
-            description="Adds a rich golden hour temperature cast.",
-            category="Color"
-        )
-
-    def apply(self, image: np.ndarray) -> np.ndarray:
-        # Increase Red channel slightly, decrease Blue channel
-        b, g, r = cv2.split(image)
-        r = cv2.add(r, 20)
-        b = cv2.subtract(b, 15)
-        return cv2.merge([b, g, r])
-```
-
-#### Step 2: Register Filter Instance
-Add registration line to `handframe/filters/__init__.py`:
-
-```python
-from handframe.filters.custom_warmth_filter import CustomWarmthFilter
-
-def build_default_registry() -> FilterRegistry:
-    registry = FilterRegistry()
-    # ... register existing filters ...
-    registry.register(CustomWarmthFilter())
-    return registry
-```
-
-#### Step 3: Enable in Configuration
-Add `"custom_warmth"` to `config/enabled_filters.json`:
-
-```json
-{
-  "enabled_filters": [
-    "original",
-    "custom_warmth",
-    "moody",
-    "vhs"
-  ]
-}
-```
-
-#### Step 4: Run Application
-Launch HandFrame. The new filter immediately participates in the gesture rotation loop.
-
----
-
-### 4.2 Step-by-Step Filter Removal Workflow
-1. **Temporary Deactivation**: Simply edit `config/enabled_filters.json` and remove the filter ID string. The filter implementation remains in the codebase for future use.
-2. **Permanent Removal**: Delete the module file from `handframe/filters/` and remove its registration line from `handframe/filters/__init__.py`.
-3. **Graceful Degradation**: If an enabled filter ID in `enabled_filters.json` does not exist in the registry, HandFrame logs a warning and skips it without crashing.
-
----
-
-### 4.3 Developer Test of Modular Isolation
-The architecture satisfies this mandatory verification test:
-> A developer can write a new `BaseFilter` subclass in `handframe/filters/my_effect.py`, register it, add its ID to `enabled_filters.json`, and cycle to it using hand gestures without touching `main.py`, `hand_tracker.py`, `gesture_engine.py`, `compositor.py`, or `camera_worker.py`.
-
----
-
-## 5. PRE-INSTALLED REQUIRED FILTER LIBRARY (15 FILTERS)
-
-HandFrame ships with 15 carefully engineered, high-quality, aesthetic image-processing filters implemented using OpenCV and NumPy vectorization.
-
-| # | Filter ID | Name | Category | Aesthetic Description & OpenCV / NumPy Implementation |
-|---|---|---|---|---|
-| **1** | `original` | **Original** | Basic | Unmodified camera feed. Serves as baseline preview. |
-| **2** | `moody` | **Moody** | Cinematic | Deeper shadows, controlled highlights, reduced saturation (-20%), elevated contrast using S-curve lookup tables (`cv2.LUT`). |
-| **3** | `warm` | **Warm** | Color | Warm golden temperature. Boosts Red channel (+15), slightly dims Blue (-10), subtle saturation boost. |
-| **4** | `cool` | **Cool** | Color | Cyan/blue tone. Boosts Blue/Green channels, slightly reduces Red, controlled contrast for crisp look. |
-| **5** | `vintage_film` | **Vintage Film** | Film | Faded/lifted blacks (black point shifted to 25), muted saturation, warm tone, subtle film grain matrix, slight vignetting. |
-| **6** | `film_grain` | **Film Grain** | Film | Analog film grain texture overlay using Gaussian noise matrix scaled and blended onto original image without shifting color hues. |
-| **7** | `dreamy_blur` | **Dreamy Blur** | Dreamy | Soft diffusion glow. Blends Gaussian blurred highlight layer with original image (`cv2.addWeighted`), retaining sharp structural edges. |
-| **8** | `cinematic` | **Cinematic** | Cinematic | Teal & Orange color grading. Shifts shadows toward teal and highlights toward warm amber using color mapping matrices (`cv2.transform`). |
-| **9** | `y2k_digicam` | **Y2K / Digicam** | Retro | Nostalgic early 2000s digital compact camera look. Slightly blown-out highlights, mild digital noise, elevated contrast, punchy primary colors. |
-| **10** | `vhs` | **VHS** | Retro | Analog tape look. Horizontal scanlines overlay, mild chromatic RGB channel offset (`np.roll`), analog tape noise, washed retro tones. |
-| **11** | `pixelate` | **Pixelated** | Creative | Retro 8-bit mosaic effect. Downscales region by factor of 8 (`INTER_LINEAR`) then upscales via `INTER_NEAREST`. |
-| **12** | `negative` | **Negative** | Basic | Classic color inversion using vectorized bitwise inversion (`cv2.bitwise_not`). |
-| **13** | `grayscale` | **Grayscale** | Basic | Clean monochrome conversion (`cv2.cvtColor` to `COLOR_BGR2GRAY` mapped back to 3-channel BGR). |
-| **14** | `sepia` | **Sepia** | Film | Rich vintage brown monochrome produced via 3x3 color matrix transformation (`cv2.transform`). |
-| **15** | `retro_flash` | **Retro Flash** | Retro | High-contrast compact camera flash aesthetic. Brightened center exposure, hard contrast, slightly washed shadows, subtle vignette. |
-
----
-
-## 6. APPLICATION STARTUP & WORKFLOW SEPARATION
-
-### 6.1 Two Distinct User Experiences
-HandFrame enforces a strict separation between configuration and framing:
-
-1. **Filter Management Experience**: Used to inspect available filters, toggle active filters, reorder rotation sequences, and preview visual effects on sample images.
-2. **HandFrame Camera Experience**: The live, distraction-free viewfinder where users framing with hands and switch filters seamlessly via gestures.
-
-### 6.2 Application Entrypoint Workflow
+### 7.1 Region-Only Bounding Box Crop Pipeline
+To maintain 30–60 FPS on desktop and mobile browsers, filters process **only the cropped sub-image bounding box**:
 
 ```text
-                  +-------------------------------+
-                  |  Launch HandFrame Application |
-                  +---------------+---------------+
-                                  |
-                                  v
-                  +---------------+---------------+
-                  |  PySide6 Startup View Window  |
-                  |                               |
-                  |  [ START CAMERA ]             |
-                  |  [ MANAGE FILTERS ]           |
-                  +-------+---------------+-------+
-                          |               |
-         Select Start     |               | Select Manage
-                          v               v
-            +-------------+---+       +---+-------------+
-            | HandFrame Live  |       | Filter Manager  |
-            | Camera View     |       | PySide6 Screen  |
-            +-----------------+       +-----------------+
+1. Compute axis-aligned bounding box [xMin, yMin, xMax, yMax] around quad points.
+2. Crop sub-region from raw video canvas context (getImageData).
+3. Execute active_filter.apply(croppedImageData).
+4. Create polygon path on 2D context using quad points.
+5. Clip context & draw processed sub-region inside quad path.
+6. Composite seamlessly over original unedited camera canvas.
 ```
 
-### 6.3 Filter Management Screen Specification
-The PySide6 Filter Manager screen provides an aesthetic, simple interface for customizing active filters:
-
-```
-+-----------------------------------------------------------------------+
-|  HandFrame — Filter Manager                                     [X]   |
-+-----------------------------------------------------------------------+
-| AVAILABLE FILTERS                          ROTATION ORDER & PREVIEW   |
-|                                                                       |
-|  [x] Original                              1. Original                |
-|  [x] Moody                                 2. Moody          [ ▲ ]    |
-|  [x] Warm Film                             3. Vintage Film   [ ▼ ]    |
-|  [x] Vintage Film                          4. VHS                     |
-|  [x] VHS                                                              |
-|  [ ] Pixelated                             +-----------------------+  |
-|  [ ] Negative                              |  FILTER PREVIEW       |  |
-|  [ ] Thermal                               |  [Sample Image / Live]|  |
-|                                            +-----------------------+  |
-|-----------------------------------------------------------------------|
-|  [ Save Configuration ]                        [ START CAMERA ]       |
-+-----------------------------------------------------------------------+
-```
-
-Features:
-- Checkboxes to enable/disable filters from the active gesture cycle.
-- **Move Up / Move Down** buttons to reorder the rotation sequence.
-- Live or static sample image preview demonstrating selected filter effects.
-- **Save Configuration** updates `config/enabled_filters.json` immediately.
-
-### 6.4 Event-Driven Gesture Switch Architecture
-Gesture detection operates completely decoupled from filter rotation logic:
-
-```
-+------------------+         Normalized Dist < 0.045         +------------------------+
-|  GestureEngine   | --------------------------------------> |  QSignal / Event       |
-|  State Machine   |   (Emits FILTER_CHANGE_REQUESTED)       |  filter_change_trigger |
-+------------------+                                         +-----------+------------+
-                                                                         |
-                                                                         v
-+------------------+         Advances Active Index           +-----------+------------+
-|  FilterRegistry  | <-------------------------------------- |  FilterController      |
-|  (Enabled List)  |           `next_filter()`               |  (State Manager)       |
-+------------------+                                         +------------------------+
-```
+### 7.2 Browser Memory & Latency Optimizations
+- **Zero React In-Loop Re-renders**: The real-time camera processing loop executes strictly inside `requestAnimationFrame()` using direct HTML Canvas refs. React state is **never** updated on per-frame loops.
+- **Buffer Reuse**: Pre-allocate offscreen canvas buffers and `ImageData` arrays to avoid garbage collection pauses.
+- **No Per-Pixel JS Loops Where Native Canvas/WebGL Applies**: Utilize `ctx.filter`, canvas blending modes, and typed array operations (`Uint8ClampedArray`) for maximum execution speed.
 
 ---
 
-## 7. HAND TRACKING & GEOMETRY SPECIFICATION
+## 8. NAVIGATION, LANDING PAGE & CAMERA CONTROLS
 
-### 7.1 MediaPipe Landmark Isolation
-HandFrame extracts 4 specific landmarks from dual hands:
-- **Left Hand Thumb Tip**: Landmark ID `4` ($P_{LT}$)
-- **Left Hand Index Tip**: Landmark ID `8` ($P_{LI}$)
-- **Right Hand Index Tip**: Landmark ID `8` ($P_{RI}$)
-- **Right Hand Thumb Tip**: Landmark ID `4` ($P_{RT}$)
+### 8.1 Minimal Landing Page
+The application opens to a minimal, elegant landing view:
+- **Title & Concept**: Clean typography introducing HandFrame.
+- **Primary Actions**:
+  - **`[ START CAMERA ]`**: Launches WebRTC camera stream and enters fullscreen viewfinder.
+  - **`[ EDIT FILTERS ]`**: Opens the filter management screen.
 
-### 7.2 Landmark Coordinate Smoothing (EMA)
-Raw coordinates are smoothed frame-by-frame to eliminate jitter:
-$$\hat{P}_t = \alpha \cdot P_{\text{raw}, t} + (1 - \alpha) \cdot \hat{P}_{t-1} \quad (\alpha = 0.35)$$
-
-### 7.3 Polygon Ordering & Validation
-Points are sorted in cyclic polar order around centroid $(\bar{X}, \bar{Y})$.
-Valid quads must satisfy:
-1. **Convexity**: Cross products of adjacent edges maintain uniform sign.
-2. **Minimum Area**: Surface area via Shoelace formula $\ge 1200\text{ px}^2$.
+### 8.2 Floating Camera Controls
+In camera mode, floating minimal controls overlay the video feed:
+- **Top-Left**: Back to Menu (`←`)
+- **Top-Right**: Front/Rear Camera Toggle (on supported mobile devices) & Debug Overlay Toggle (`D`)
+- **Bottom-Center**: Current Active Filter Pill (clickable to manually advance filter)
 
 ---
 
-## 8. REGION-ONLY OPTIMIZED COMPOSITING PIPELINE
+## 9. ERROR HANDLING, PERMISSIONS & CAMERA SWITCHING
 
-To guarantee **30–60 FPS**, visual filters process **only the cropped sub-image bounding box**:
+### 9.1 Camera Access & WebRTC Permission States
+- **Permission Prompt**: Clear UI explaining camera usage prior to browser permission prompt.
+- **Permission Denied**: Friendly UI state with instructions on enabling camera access in browser settings.
+- **No Camera Found**: Clear notification when no video input devices are detected.
+- **Unsupported Browser**: Fallback notice for browsers lacking WebRTC / MediaPipe WASM support.
 
-```python
-def process_region_and_composite(
-    raw_frame: np.ndarray,
-    quad_pts: np.ndarray,
-    active_filter: BaseFilter,
-    feather_radius: int = 5
-) -> np.ndarray:
-    H, W, _ = raw_frame.shape
-    output_frame = raw_frame.copy()
-    
-    # 1. Axis-aligned bounding box around the quadrilateral
-    x_min = max(0, int(np.min(quad_pts[:, 0])))
-    x_max = min(W, int(np.max(quad_pts[:, 0])))
-    y_min = max(0, int(np.min(quad_pts[:, 1])))
-    y_max = min(H, int(np.max(quad_pts[:, 1])))
-    
-    if (x_max - x_min) < 10 or (y_max - y_min) < 10:
-        return output_frame
-        
-    # 2. Crop sub-region
-    cropped_raw = raw_frame[y_min:y_max, x_min:x_max]
-    
-    # 3. Apply visual filter strictly to cropped sub-region with crash isolation
-    try:
-        filtered_cropped = active_filter.apply(cropped_raw)
-    except Exception:
-        filtered_cropped = cropped_raw
-    
-    # 4. Generate local polygon mask
-    local_pts = quad_pts.copy()
-    local_pts[:, 0] -= x_min
-    local_pts[:, 1] -= y_min
-    
-    mask_local = np.zeros((y_max - y_min, x_max - x_min), dtype=np.uint8)
-    cv2.fillConvexPoly(mask_local, local_pts.astype(np.int32), 255)
-    
-    if feather_radius > 0:
-        ksize = feather_radius * 2 + 1
-        mask_local = cv2.GaussianBlur(mask_local, (ksize, ksize), 0)
-        
-    alpha = (mask_local.astype(np.float32) / 255.0)[:, :, np.newaxis]
-    
-    # 5. Vectorized alpha compositing back into canvas
-    composited_sub = (filtered_cropped.astype(np.float32) * alpha + 
-                      cropped_raw.astype(np.float32) * (1.0 - alpha)).astype(np.uint8)
-                      
-    output_frame[y_min:y_max, x_min:x_max] = composited_sub
-    return output_frame
-```
+### 9.2 Front / Rear Camera Switching
+For mobile devices supporting multiple cameras:
+- Toggling calls `MediaStreamTrack.stop()` on existing tracks.
+- Re-requests `getUserMedia()` with updated `facingMode: "user" | "environment"`.
+- Automatically recalculates aspect ratio, video dimensions, and coordinate mirror matrices.
 
 ---
 
-## 9. PYSIDE6 THREADING & DEPENDENCIES
+## 10. DEVELOPMENT DEBUG OVERLAY MODE
 
-### 9.1 PySide6 GUI Thread Separation
-- **Main GUI Thread**: PySide6 `QMainWindow`, startup view, Filter Manager dialog, HUD overlays.
-- **Worker Thread (`CameraWorkerThread` subclassing `QThread`)**: OpenCV camera capture loop, MediaPipe tracking, gesture evaluation, and region-only compositing. Emits `frame_processed(QImage, dict)` to main thread.
-
-### 9.2 Exact Runtime Dependencies (`requirements.txt`)
-```text
-Python>=3.11
-opencv-python>=4.8.0
-mediapipe>=0.10.0
-numpy>=1.24.0
-PySide6>=6.5.0
-pyinstaller>=6.0.0
-```
+Pressing 'D' (or tapping Debug in controls) toggles a dev overlay displaying:
+- 4 tracked landmark points (colored circles)
+- Quadrilateral bounding outline & centroid
+- Real-time FPS counter & frame processing latency (ms)
+- Camera stream native resolution vs canvas display resolution
+- Current gesture state machine status (`READY` / `TRIGGERED` / `WAIT_FOR_SEPARATION`)
 
 ---
 
-## 10. PROJECT DIRECTORY STRUCTURE
+## 11. MCP SERVER USAGE GUIDELINES
 
-```
-HandFrame/
-├── config/
-│   ├── default_config.json          # System settings & gesture thresholds
-│   └── enabled_filters.json         # Configurable active filter list & order
-├── handframe/
-│   ├── __init__.py
-│   ├── main.py                      # Application launcher & PySide6 entrypoint
-│   ├── core/                        # Core CV pipeline
-│   │   ├── __init__.py
-│   │   ├── camera_worker.py         # QThread video capture worker
-│   │   ├── hand_tracker.py          # MediaPipe hands & EMA smoother
-│   │   ├── frame_geometry.py        # Convex quad validation
-│   │   ├── gesture_engine.py        # Proximity state machine & event emitter
-│   │   └── compositor.py            # Region crop & alpha blending
-│   ├── filters/                     # Modular Visual Filter System
-│   │   ├── __init__.py              # Central registry builder & auto-loader
-│   │   ├── base_filter.py           # Abstract Base Class BaseFilter
-│   │   ├── filter_registry.py       # Registry & dynamic manager
-│   │   ├── original_filter.py       # 1. Original (Baseline)
-│   │   ├── moody_filter.py          # 2. Moody Cinematic
-│   │   ├── warm_filter.py           # 3. Warm Tone
-│   │   ├── cool_filter.py           # 4. Cool Tone
-│   │   ├── vintage_film_filter.py   # 5. Vintage Film
-│   │   ├── film_grain_filter.py     # 6. Film Grain
-│   │   ├── dreamy_blur_filter.py    # 7. Dreamy Blur
-│   │   ├── cinematic_filter.py      # 8. Cinematic Teal/Orange
-│   │   ├── y2k_digicam_filter.py    # 9. Y2K / Digicam
-│   │   ├── vhs_filter.py            # 10. VHS Retro Tape
-│   │   ├── pixelate_filter.py       # 11. Pixelated 8-Bit
-│   │   ├── negative_filter.py       # 12. Negative Invert
-│   │   ├── grayscale_filter.py      # 13. Grayscale
-│   │   ├── sepia_filter.py          # 14. Sepia
-│   │   └── retro_flash_filter.py    # 15. Retro Flash
-│   ├── ui/                          # PySide6 Desktop GUI
-│   │   ├── __init__.py
-│   │   ├── startup_view.py          # Startup screen [Start Camera / Manage Filters]
-│   │   ├── filter_manager.py        # Filter Management GUI dialog
-│   │   ├── camera_view.py           # Live camera feed window & HUD
-│   │   └── status_bar.py            # HUD status bar
-│   └── utils/
-│       ├── __init__.py
-│       ├── logger.py
-│       └── config_loader.py
-├── tests/
-│   ├── test_filters.py              # Filter compliance unit tests
-│   ├── test_geometry.py
-│   └── test_gesture.py
-├── HANDFRAME_SPECIFICATION.md       # Approved Technical Specification
-├── README.md                        # Quickstart documentation
-├── handframe.spec                   # PyInstaller Windows Executable Spec
-└── requirements.txt                 # Dependency manifest
-```
+Implementation agents may utilize available MCP servers for:
+- Researching modern web design trends and minimal UI patterns.
+- Validating browser responsive layouts and mobile viewport behavior (`100dvh`).
+- Testing accessibility, touch targets, and safe-area compatibility.
+
+MCP usage must **not** introduce third-party cloud runtime dependencies or compromise offline-first client-side execution.
 
 ---
 
-## 11. ACCEPTANCE CRITERIA CHECKLIST
+## 12. MANDATORY NON-IMPLEMENTATION INSTRUCTION
 
-- [x] **AC-01**: Filters are first-class, independent modules inheriting from `BaseFilter`.
-- [x] **AC-02**: Core code contains zero `if filter == "grayscale":` hardcoded branching.
-- [x] **AC-03**: Filters operate strictly on cropped sub-regions (`image_region -> processed_region`).
-- [x] **AC-04**: Explicit exclusion of face AR, dog ears, makeup, or identity morphing effects.
-- [x] **AC-05**: Active filter list and rotation order are configured via `config/enabled_filters.json`.
-- [x] **AC-06**: Startup view provides clear choices: **[ START CAMERA ]** and **[ MANAGE FILTERS ]**.
-- [x] **AC-07**: PySide6 Filter Manager allows toggling, reordering, saving, and previewing filters.
-- [x] **AC-08**: 15 pre-installed aesthetic filters implemented using OpenCV and NumPy vectorization.
-- [x] **AC-09**: Gesture detector emits decoupled events; gesture engine does not import filter classes.
-- [x] **AC-10**: Filter runtime errors are caught safely and fall back to `OriginalFilter` without crashing.
-- [x] **AC-11**: Developers can add new filters in 3 simple steps without modifying core engine code.
+> **CRITICAL MANDATE: THIS TASK IS STRICTLY AN UPDATE TO THE TECHNICAL SPECIFICATION FILE (`HANDFRAME_SPECIFICATION.md`). DO NOT IMPLEMENT CODE, DO NOT CREATE COMPONENTS, DO NOT INSTALL DEPENDENCIES, DO NOT MODIFY SOURCE CODE, AND DO NOT RUN THE APPLICATION.**
