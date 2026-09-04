@@ -15,7 +15,41 @@ export class QuadCompositor {
   }
 
   /**
-   * Composites camera frame with regional quadrilateral filter.
+   * Calculates aspect-ratio preserving 'cover' dimensions for video rendering.
+   */
+  private getCoverBounds(
+    videoWidth: number,
+    videoHeight: number,
+    canvasWidth: number,
+    canvasHeight: number
+  ): { renderWidth: number; renderHeight: number; offsetX: number; offsetY: number } {
+    if (videoWidth <= 0 || videoHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+      return { renderWidth: canvasWidth, renderHeight: canvasHeight, offsetX: 0, offsetY: 0 };
+    }
+
+    const videoAspect = videoWidth / videoHeight;
+    const canvasAspect = canvasWidth / canvasHeight;
+
+    let renderWidth = canvasWidth;
+    let renderHeight = canvasHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (canvasAspect > videoAspect) {
+      // Canvas is wider than video stream -> scale by width, crop top/bottom
+      renderHeight = canvasWidth / videoAspect;
+      offsetY = (canvasHeight - renderHeight) / 2;
+    } else {
+      // Canvas is taller than video stream -> scale by height, crop left/right
+      renderWidth = canvasHeight * videoAspect;
+      offsetX = (canvasWidth - renderWidth) / 2;
+    }
+
+    return { renderWidth, renderHeight, offsetX, offsetY };
+  }
+
+  /**
+   * Composites camera frame with regional quadrilateral filter, preserving native aspect ratio.
    */
   public renderFrame(
     mainCtx: CanvasRenderingContext2D,
@@ -26,13 +60,29 @@ export class QuadCompositor {
     activeFilter: BaseFilter,
     isMirrored: boolean = false
   ): void {
-    // 1. Draw background raw camera video feed
+    const videoWidth = videoElement.videoWidth || canvasWidth;
+    const videoHeight = videoElement.videoHeight || canvasHeight;
+
+    const { renderWidth, renderHeight, offsetX, offsetY } = this.getCoverBounds(
+      videoWidth,
+      videoHeight,
+      canvasWidth,
+      canvasHeight
+    );
+
+    // Clear background
+    mainCtx.fillStyle = '#000000';
+    mainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // 1. Draw background video stream maintaining exact native aspect ratio without stretching
     mainCtx.save();
     if (isMirrored) {
       mainCtx.translate(canvasWidth, 0);
       mainCtx.scale(-1, 1);
+      mainCtx.drawImage(videoElement, offsetX, offsetY, renderWidth, renderHeight);
+    } else {
+      mainCtx.drawImage(videoElement, offsetX, offsetY, renderWidth, renderHeight);
     }
-    mainCtx.drawImage(videoElement, 0, 0, canvasWidth, canvasHeight);
     mainCtx.restore();
 
     if (!quad) return;
@@ -74,7 +124,7 @@ export class QuadCompositor {
       }
     }
 
-    // 6. Draw subtle, elegant HandFrame bounding line & fingertip indicators
+    // 6. Draw subtle HandFrame bounding line & fingertip indicators
     mainCtx.save();
     mainCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
     mainCtx.lineWidth = 1.5;

@@ -157,9 +157,9 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       if (video && canvas && tracker && compositor && video.readyState >= 2) {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
-          // Resize canvas to match displayed window viewport
-          const displayWidth = window.innerWidth;
-          const displayHeight = window.innerHeight;
+          // Resize canvas to match displayed window/element bounds
+          const displayWidth = canvas.clientWidth || window.innerWidth;
+          const displayHeight = canvas.clientHeight || window.innerHeight;
 
           if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
             canvas.width = displayWidth;
@@ -168,7 +168,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const isMirrored = cameraManagerRef.current.isMirrored();
 
-          // 1. Detect Hand Landmarks (with temporal grace period & outlier rejection)
+          // 1. Detect Hand Landmarks (with orientation-agnostic tracking & temporal grace period)
           const landmarksResult = tracker.detect(video, timestamp, isMirrored);
 
           let quad: QuadPolygon | null = null;
@@ -190,15 +190,14 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               P4: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P4, transformConfig),
             };
 
-            // Validate convexity and area before rendering
-            if (QuadGeometry.isValidConvexQuad(rawQuad)) {
-              // Apply velocity-aware adaptive spatial smoothing
-              quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current);
-              lastQuadRef.current = quad;
-            } else if (lastQuadRef.current) {
-              // Retain last valid quad if single frame is non-convex
-              quad = lastQuadRef.current;
+            // Process quad smoothly without halting on extreme 180° rotation
+            let validQuad = rawQuad;
+            if (!QuadGeometry.isValidConvexQuad(rawQuad)) {
+              validQuad = QuadGeometry.untangleConvexQuad(rawQuad);
             }
+
+            quad = QuadGeometry.smoothQuad(validQuad, lastQuadRef.current);
+            lastQuadRef.current = quad;
           } else {
             lastQuadRef.current = null;
           }

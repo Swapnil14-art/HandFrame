@@ -9,10 +9,10 @@ export type TrackingStatus =
   | 'TRACKING_DEGRADED';
 
 export interface HandFramePoints {
-  P1: Point2D; // Left Index Tip
-  P2: Point2D; // Right Index Tip
-  P3: Point2D; // Right Thumb Tip
-  P4: Point2D; // Left Thumb Tip
+  P1: Point2D; // Vertex 1 (Top-Left / Counter-clockwise)
+  P2: Point2D; // Vertex 2 (Top-Right)
+  P3: Point2D; // Vertex 3 (Bottom-Right)
+  P4: Point2D; // Vertex 4 (Bottom-Left)
   confidence: number;
   status: TrackingStatus;
   isGraceFrame?: boolean;
@@ -26,7 +26,7 @@ export class HandTracker {
   // Temporal persistence & grace period state
   private lastValidPoints: HandFramePoints | null = null;
   private graceFramesCount: number = 0;
-  private readonly maxGraceFrames: number = 10; // ~300ms grace period at 30fps
+  private readonly maxGraceFrames: number = 12; // ~350ms grace period at 30fps
 
   /**
    * Initializes MediaPipe HandLandmarker WASM instance.
@@ -48,9 +48,9 @@ export class HandTracker {
         },
         runningMode: 'VIDEO',
         numHands: 2,
-        minHandDetectionConfidence: 0.45,
-        minHandPresenceConfidence: 0.45,
-        minTrackingConfidence: 0.45,
+        minHandDetectionConfidence: 0.4,
+        minHandPresenceConfidence: 0.4,
+        minTrackingConfidence: 0.4,
       });
 
       this.isReady = true;
@@ -70,9 +70,9 @@ export class HandTracker {
           },
           runningMode: 'VIDEO',
           numHands: 2,
-          minHandDetectionConfidence: 0.4,
-          minHandPresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4,
+          minHandDetectionConfidence: 0.35,
+          minHandPresenceConfidence: 0.35,
+          minTrackingConfidence: 0.35,
         });
 
         this.isReady = true;
@@ -91,7 +91,7 @@ export class HandTracker {
 
   /**
    * Detects hands in video frame and extracts 4 key fingertip landmarks.
-   * Employs temporal grace period, outlier rejection, and robust handedness mapping.
+   * Completely orientation-agnostic (supports 180° rotation, upside-down hands, thumb-below-index).
    */
   public detect(
     videoElement: HTMLVideoElement,
@@ -107,7 +107,7 @@ export class HandTracker {
       const hasTwoHands = results && results.landmarks && results.landmarks.length >= 2;
 
       if (!hasTwoHands) {
-        // TEMPORAL GRACE PERIOD: If 2 hands are briefly lost, retain last valid points
+        // TEMPORAL GRACE PERIOD: Retain last valid points during temporary 1-frame tracking drops
         if (this.lastValidPoints && this.graceFramesCount < this.maxGraceFrames) {
           this.graceFramesCount++;
           return {
@@ -123,69 +123,56 @@ export class HandTracker {
         return null;
       }
 
-      // We have 2 hands detected in this frame
-      const hand0 = results.landmarks[0]; // 21 landmarks each
+      // 1. Extract raw 4 fingertips (MediaPipe Landmark 8 = Index Tip, Landmark 4 = Thumb Tip)
+      const hand0 = results.landmarks[0];
       const hand1 = results.landmarks[1];
 
-      const handedness0 = results.handednesses?.[0]?.[0]?.categoryName; // 'Left' or 'Right'
-      const handedness1 = results.handednesses?.[1]?.[0]?.categoryName;
+      const candidatePoints: Point2D[] = [
+        { x: hand0[8].x, y: hand0[8].y }, // Hand 0 Index
+        { x: hand0[4].x, y: hand0[4].y }, // Hand 0 Thumb
+        { x: hand1[8].x, y: hand1[8].y }, // Hand 1 Index
+        { x: hand1[4].x, y: hand1[4].y }, // Hand 1 Thumb
+      ];
 
-      // Calculate wrist X coordinates for spatial sorting (Landmark 0 = WRIST)
-      const x0 = hand0[0].x;
-      const x1 = hand1[0].x;
-
-      let leftHandLandmarks = hand0;
-      let rightHandLandmarks = hand1;
-
-      // Determine left vs right hand based on combined handedness & horizontal position
-      // In camera coordinates, x goes 0 -> 1 (left to right).
-      // If mirrored (front camera), screen-left is x=0 in raw space.
-      if (handedness0 === 'Left' && handedness1 === 'Right') {
-        leftHandLandmarks = hand0;
-        rightHandLandmarks = hand1;
-      } else if (handedness0 === 'Right' && handedness1 === 'Left') {
-        leftHandLandmarks = hand1;
-        rightHandLandmarks = hand0;
-      } else {
-        // Fallback: spatial sorting by wrist X coordinate
-        if (x0 < x1) {
-          leftHandLandmarks = hand0;
-          rightHandLandmarks = hand1;
-        } else {
-          leftHandLandmarks = hand1;
-          rightHandLandmarks = hand0;
-        }
-      }
-
-      // Landmark ID 8 = INDEX_FINGER_TIP, Landmark ID 4 = THUMB_TIP
-      let rawP1 = { x: leftHandLandmarks[8].x, y: leftHandLandmarks[8].y }; // Left Index
-      let rawP4 = { x: leftHandLandmarks[4].x, y: leftHandLandmarks[4].y }; // Left Thumb
-      let rawP2 = { x: rightHandLandmarks[8].x, y: rightHandLandmarks[8].y }; // Right Index
-      let rawP3 = { x: rightHandLandmarks[4].x, y: rightHandLandmarks[4].y }; // Right Thumb
-
-      // Outlier Rejection: Damp unphysically large single-frame jumps (>0.35 norm units)
-      if (this.lastValidPoints) {
-        rawP1 = this.clampOutlier(rawP1, this.lastValidPoints.P1, 0.35);
-        rawP2 = this.clampOutlier(rawP2, this.lastValidPoints.P2, 0.35);
-        rawP3 = this.clampOutlier(rawP3, this.lastValidPoints.P3, 0.35);
-        rawP4 = this.clampOutlier(rawP4, this.lastValidPoints.P4, 0.35);
-      }
-
+      // Confidence computation
       const score0 = results.handednesses?.[0]?.[0]?.score || 0.85;
       const score1 = results.handednesses?.[1]?.[0]?.score || 0.85;
       const confidence = (score0 + score1) / 2;
 
+      let orderedPoints: [Point2D, Point2D, Point2D, Point2D];
+
+      // 2. Track points across time using Optimal Distance Bipartite Matching
+      if (this.lastValidPoints) {
+        const prevPts = [
+          this.lastValidPoints.P1,
+          this.lastValidPoints.P2,
+          this.lastValidPoints.P3,
+          this.lastValidPoints.P4,
+        ];
+        orderedPoints = this.matchCandidatesToPrevious(candidatePoints, prevPts);
+      } else {
+        // First frame: Order points around centroid in perimeter order
+        orderedPoints = this.orderPointsConvex(candidatePoints);
+      }
+
+      // 3. Outlier Rejection: Clamp unphysically large single-frame teleports (>0.35 norm units)
+      if (this.lastValidPoints) {
+        orderedPoints[0] = this.clampOutlier(orderedPoints[0], this.lastValidPoints.P1, 0.35);
+        orderedPoints[1] = this.clampOutlier(orderedPoints[1], this.lastValidPoints.P2, 0.35);
+        orderedPoints[2] = this.clampOutlier(orderedPoints[2], this.lastValidPoints.P3, 0.35);
+        orderedPoints[3] = this.clampOutlier(orderedPoints[3], this.lastValidPoints.P4, 0.35);
+      }
+
       const currentPoints: HandFramePoints = {
-        P1: rawP1,
-        P2: rawP2,
-        P3: rawP3,
-        P4: rawP4,
+        P1: orderedPoints[0],
+        P2: orderedPoints[1],
+        P3: orderedPoints[2],
+        P4: orderedPoints[3],
         confidence,
         status: 'TRACKING_STABLE',
         isGraceFrame: false,
       };
 
-      // Reset grace counter & save last valid points
       this.graceFramesCount = 0;
       this.lastValidPoints = currentPoints;
 
@@ -205,15 +192,79 @@ export class HandTracker {
   }
 
   /**
-   * Prevents impossible single-frame teleports (outlier rejection).
+   * Optimal 1-to-1 bipartite matching between new candidate points and previous frame points.
+   * Prevents point-swapping when hands rotate 180°, cross, or flip orientation.
    */
+  private matchCandidatesToPrevious(
+    candidates: Point2D[],
+    previous: Point2D[]
+  ): [Point2D, Point2D, Point2D, Point2D] {
+    // Generate all 24 permutations of 4 elements
+    const permutations = this.getPermutations([0, 1, 2, 3]);
+
+    let minTotalDistSq = Infinity;
+    let bestPermutation = permutations[0];
+
+    for (const perm of permutations) {
+      let totalDistSq = 0;
+      for (let i = 0; i < 4; i++) {
+        const cand = candidates[perm[i]];
+        const prev = previous[i];
+        const dx = cand.x - prev.x;
+        const dy = cand.y - prev.y;
+        totalDistSq += dx * dx + dy * dy;
+      }
+
+      if (totalDistSq < minTotalDistSq) {
+        minTotalDistSq = totalDistSq;
+        bestPermutation = perm;
+      }
+    }
+
+    return [
+      candidates[bestPermutation[0]],
+      candidates[bestPermutation[1]],
+      candidates[bestPermutation[2]],
+      candidates[bestPermutation[3]],
+    ];
+  }
+
+  /**
+   * Sorts 4 points by polar angle around their centroid to form a clean, non-self-intersecting perimeter loop.
+   */
+  private orderPointsConvex(points: Point2D[]): [Point2D, Point2D, Point2D, Point2D] {
+    const cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
+    const cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
+
+    const sorted = [...points].sort((a, b) => {
+      const angleA = Math.atan2(a.y - cy, a.x - cx);
+      const angleB = Math.atan2(b.y - cy, b.x - cx);
+      return angleA - angleB;
+    });
+
+    return [sorted[0], sorted[1], sorted[2], sorted[3]];
+  }
+
+  private getPermutations(arr: number[]): number[][] {
+    if (arr.length <= 1) return [arr];
+    const result: number[][] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const current = arr[i];
+      const remaining = arr.slice(0, i).concat(arr.slice(i + 1));
+      const remainingPerms = this.getPermutations(remaining);
+      for (const perm of remainingPerms) {
+        result.push([current, ...perm]);
+      }
+    }
+    return result;
+  }
+
   private clampOutlier(candidate: Point2D, previous: Point2D, maxJumpNorm: number): Point2D {
     const dx = candidate.x - previous.x;
     const dy = candidate.y - previous.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist > maxJumpNorm) {
-      // Clamp jump to max allowed speed
       const scale = maxJumpNorm / dist;
       return {
         x: previous.x + dx * scale,

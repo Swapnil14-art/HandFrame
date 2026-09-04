@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FilterSessionStore } from '../store/FilterSessionStore';
 import { BaseFilter } from '../filters/types/FilterTypes';
+import { CustomFilterModal } from './CustomFilterModal';
 import {
   ArrowLeft,
   Plus,
@@ -13,6 +14,7 @@ import {
   Sparkles,
   Info,
   CheckCircle2,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface UnlistedFilterEditorProps {
@@ -25,31 +27,35 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
   onGoHome,
 }) => {
   const sessionStore = FilterSessionStore.getInstance();
-  const [allFilters, setAllFilters] = useState<BaseFilter[]>([]);
+  const [allBuiltInFilters, setAllBuiltInFilters] = useState<BaseFilter[]>([]);
+  const [customFilters, setCustomFilters] = useState<BaseFilter[]>([]);
   const [activeFilterIds, setActiveFilterIds] = useState<string[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const refreshState = () => {
+    setAllBuiltInFilters(sessionStore.getAllBuiltInFilters());
+    setCustomFilters(sessionStore.getCustomFilters());
+    setActiveFilterIds(sessionStore.getActiveFilterIds());
+  };
 
   useEffect(() => {
-    setAllFilters(sessionStore.getAllBuiltInFilters());
-    setActiveFilterIds(sessionStore.getActiveFilterIds());
-
+    refreshState();
     const unsubscribe = sessionStore.subscribe(() => {
-      setActiveFilterIds(sessionStore.getActiveFilterIds());
+      refreshState();
     });
-
     return () => unsubscribe();
   }, []);
 
+  const allAvailableFilters = [...allBuiltInFilters, ...customFilters];
+
   const activeFilters = activeFilterIds
-    .map((id) => allFilters.find((f) => f.id === id))
+    .map((id) => allAvailableFilters.find((f) => f.id === id))
     .filter((f): f is BaseFilter => f !== undefined);
 
-  const availableFilters = allFilters.filter((f) => !activeFilterIds.includes(f.id));
+  const availableBuiltInFilters = allBuiltInFilters.filter((f) => !activeFilterIds.includes(f.id));
+  const availableCustomFilters = customFilters.filter((f) => !activeFilterIds.includes(f.id));
 
-  const handleAddFilter = (id: string) => {
-    sessionStore.toggleFilter(id);
-  };
-
-  const handleRemoveFilter = (id: string) => {
+  const handleToggleFilter = (id: string) => {
     sessionStore.toggleFilter(id);
   };
 
@@ -63,6 +69,14 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
 
   const handleResetToDefaults = () => {
     sessionStore.resetToDefaults();
+  };
+
+  const handleCreateCustomFilter = (filter: BaseFilter) => {
+    sessionStore.addCustomFilter(filter);
+  };
+
+  const handleDeleteCustomFilter = (id: string) => {
+    sessionStore.deleteCustomFilter(id);
   };
 
   return (
@@ -85,17 +99,27 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
                   Unlisted Route
                 </span>
               </div>
-              <p className="text-xs text-white/40">Configure active gesture cycle for this browser session</p>
+              <p className="text-xs text-white/40">Configure active gesture cycle & custom matrix filters</p>
             </div>
           </div>
 
-          <button
-            onClick={onLaunchCamera}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold rounded-full hover:bg-white/90 active:scale-95 transition-all shadow-lg shrink-0"
-          >
-            <Camera className="w-3.5 h-3.5" />
-            <span>Launch Camera</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold rounded-full transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Filter</span>
+            </button>
+
+            <button
+              onClick={onLaunchCamera}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold rounded-full hover:bg-white/90 active:scale-95 transition-all shadow-lg"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>Launch Camera</span>
+            </button>
+          </div>
         </header>
 
         {/* In-Memory Session Banner Callout */}
@@ -104,7 +128,7 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
           <div className="space-y-1">
             <p className="font-semibold text-amber-300">Session-Only Temporary Configuration</p>
             <p className="text-amber-200/70 text-[11px] leading-relaxed">
-              Modifications here apply only to your <strong>currently loaded webpage session</strong>. Temporary changes live strictly in-memory and will <strong>automatically reset to default settings upon reloading or refreshing the page</strong>.
+              Modifications and custom matrix filters live strictly in-memory during this browser session. <strong>Reloading or refreshing the page will reset to default built-in filters</strong>.
             </p>
           </div>
         </div>
@@ -176,7 +200,7 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
                     </div>
 
                     <button
-                      onClick={() => handleRemoveFilter(filter.id)}
+                      onClick={() => handleToggleFilter(filter.id)}
                       disabled={activeFilters.length <= 1}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-medium transition-all disabled:opacity-30 disabled:hover:bg-rose-500/10"
                       title={activeFilters.length <= 1 ? 'Minimum 1 filter required' : 'Remove Filter'}
@@ -191,23 +215,88 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
           )}
         </section>
 
+        {/* My Custom Session Filters Section */}
+        {customFilters.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+              <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold text-white tracking-wide">
+                My Custom Filters ({customFilters.length})
+              </h2>
+            </div>
+
+            <div className="space-y-2.5">
+              {customFilters.map((filter) => {
+                const isActive = activeFilterIds.includes(filter.id);
+                return (
+                  <div
+                    key={filter.id}
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900/80 border border-emerald-500/30 transition-all"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">{filter.displayName}</span>
+                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          Custom Session Filter
+                        </span>
+                      </div>
+                      <p className="text-xs text-white/50 mt-0.5">{filter.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleToggleFilter(filter.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          isActive
+                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}
+                      >
+                        {isActive ? (
+                          <>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Filter</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteCustomFilter(filter.id)}
+                        className="p-1.5 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                        title="Delete Custom Filter"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Available Built-in Filters Section */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 border-b border-white/10 pb-2">
             <Sparkles className="w-4 h-4 text-white/60" />
             <h2 className="text-sm font-semibold text-white tracking-wide">
-              Available Built-in Filters ({availableFilters.length})
+              Available Built-in Filters ({availableBuiltInFilters.length})
             </h2>
           </div>
 
-          {availableFilters.length === 0 ? (
+          {availableBuiltInFilters.length === 0 ? (
             <div className="p-6 text-center text-xs text-emerald-400/80 bg-emerald-950/20 border border-emerald-500/20 rounded-xl flex items-center justify-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
               <span>All built-in filters are currently added to the gesture cycle.</span>
             </div>
           ) : (
             <div className="space-y-2.5">
-              {availableFilters.map((filter) => (
+              {availableBuiltInFilters.map((filter) => (
                 <div
                   key={filter.id}
                   className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-white/10 hover:border-white/20 opacity-80 hover:opacity-100 transition-all"
@@ -224,7 +313,7 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
 
                   {/* Explicit Add Button */}
                   <button
-                    onClick={() => handleAddFilter(filter.id)}
+                    onClick={() => handleToggleFilter(filter.id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-medium transition-all shrink-0 active:scale-95"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -238,9 +327,16 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
 
         {/* Footer info */}
         <footer className="text-center pt-6 border-t border-white/10 text-xs text-white/30">
-          HandFrame Built-in Filter Registry Interface — Temporary Session Configuration
+          HandFrame Built-in & Custom Matrix Filter Architecture — Session Temporary Memory
         </footer>
       </div>
+
+      {/* Custom Filter Creation Modal */}
+      <CustomFilterModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreateFilter={handleCreateCustomFilter}
+      />
     </div>
   );
 };

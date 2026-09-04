@@ -52,6 +52,29 @@ export class QuadGeometry {
   }
 
   /**
+   * Sorts quad vertices around their polar centroid to untangle self-intersecting bowtie shapes.
+   * Ensures tracking never freezes during extreme hand rotations or 180° inversion.
+   */
+  public static untangleConvexQuad(quad: QuadPolygon): QuadPolygon {
+    const pts = [quad.P1, quad.P2, quad.P3, quad.P4];
+    const cx = (quad.P1.x + quad.P2.x + quad.P3.x + quad.P4.x) / 4;
+    const cy = (quad.P1.y + quad.P2.y + quad.P3.y + quad.P4.y) / 4;
+
+    const sorted = [...pts].sort((a, b) => {
+      const angleA = Math.atan2(a.y - cy, a.x - cx);
+      const angleB = Math.atan2(b.y - cy, b.x - cx);
+      return angleA - angleB;
+    });
+
+    return {
+      P1: sorted[0],
+      P2: sorted[1],
+      P3: sorted[2],
+      P4: sorted[3],
+    };
+  }
+
+  /**
    * Validates if quad points form a valid, non-self-intersecting convex polygon.
    */
   public static isValidConvexQuad(quad: QuadPolygon): boolean {
@@ -76,9 +99,8 @@ export class QuadGeometry {
       }
     }
 
-    // Minimum area check
     const area = this.getPolygonArea(quad);
-    return area >= 50; // At least 50 px^2 surface area
+    return area >= 30;
   }
 
   /**

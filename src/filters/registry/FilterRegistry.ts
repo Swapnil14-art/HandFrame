@@ -19,10 +19,17 @@ export class FilterRegistry {
   }
 
   /**
-   * Registers a built-in filter module.
+   * Registers a filter module.
    */
   public registerFilter(filter: BaseFilter): void {
     this.registeredFilters.set(filter.id, filter);
+  }
+
+  /**
+   * Unregisters a custom filter module.
+   */
+  public unregisterFilter(id: string): void {
+    this.registeredFilters.delete(id);
   }
 
   /**

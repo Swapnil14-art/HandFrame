@@ -7,6 +7,9 @@ export class FilterSessionStore {
 
   // Active filter IDs in the order they cycle
   private activeFilterIds: string[] = [];
+
+  // Temporary session-only custom filter IDs
+  private customFilterIds: string[] = [];
   
   // Current selected index
   private currentIndex: number = 0;
@@ -27,9 +30,12 @@ export class FilterSessionStore {
 
   /**
    * Resets active filter cycle to default built-in filters order.
-   * Discards any temporary session modifications.
+   * Discards any temporary session modifications and custom filters.
    */
   public resetToDefaults(): void {
+    // Unregister all custom filters from registry
+    this.customFilterIds.forEach((id) => this.registry.unregisterFilter(id));
+    this.customFilterIds = [];
     this.activeFilterIds = this.registry.getDefaultFilterIds();
     this.currentIndex = 0;
     this.notifyListeners();
@@ -39,7 +45,48 @@ export class FilterSessionStore {
    * Gets list of all registered built-in filters.
    */
   public getAllBuiltInFilters(): BaseFilter[] {
-    return this.registry.getAllFilters();
+    return this.registry.getAllFilters().filter((f) => f.category !== 'Custom');
+  }
+
+  /**
+   * Gets list of all temporary custom filters in this session.
+   */
+  public getCustomFilters(): BaseFilter[] {
+    const list: BaseFilter[] = [];
+    for (const id of this.customFilterIds) {
+      const f = this.registry.getFilter(id);
+      if (f) list.push(f);
+    }
+    return list;
+  }
+
+  /**
+   * Adds a newly created custom filter to the temporary session.
+   */
+  public addCustomFilter(filter: BaseFilter): void {
+    this.registry.registerFilter(filter);
+    if (!this.customFilterIds.includes(filter.id)) {
+      this.customFilterIds.push(filter.id);
+    }
+    // Automatically enable in active cycle when created
+    if (!this.activeFilterIds.includes(filter.id)) {
+      this.activeFilterIds.push(filter.id);
+    }
+    this.notifyListeners();
+  }
+
+  /**
+   * Deletes a temporary custom filter from the session.
+   */
+  public deleteCustomFilter(id: string): void {
+    this.customFilterIds = this.customFilterIds.filter((fId) => fId !== id);
+    this.activeFilterIds = this.activeFilterIds.filter((fId) => fId !== id);
+    this.registry.unregisterFilter(id);
+
+    if (this.currentIndex >= this.activeFilterIds.length) {
+      this.currentIndex = 0;
+    }
+    this.notifyListeners();
   }
 
   /**
@@ -66,7 +113,6 @@ export class FilterSessionStore {
    */
   public getCurrentFilter(): BaseFilter {
     if (this.activeFilterIds.length === 0) {
-      // Fallback to original
       return this.registry.getFilter('original') || this.registry.getAllFilters()[0];
     }
 
@@ -100,7 +146,7 @@ export class FilterSessionStore {
   }
 
   /**
-   * Temporarily enables or disables a built-in filter for the local session.
+   * Temporarily enables or disables a filter for the local session.
    */
   public toggleFilter(id: string): void {
     const filter = this.registry.getFilter(id);
@@ -128,22 +174,6 @@ export class FilterSessionStore {
    */
   public isFilterActive(id: string): boolean {
     return this.activeFilterIds.includes(id);
-  }
-
-  /**
-   * Temporarily reorders active filter list for the local session.
-   */
-  public reorderFilters(newOrderIds: string[]): void {
-    // Ensure all IDs exist in registry
-    const valid = newOrderIds.filter((id) => this.registry.getFilter(id) !== undefined);
-    if (valid.length > 0) {
-      const currentId = this.activeFilterIds[this.currentIndex];
-      this.activeFilterIds = valid;
-
-      const newIdx = this.activeFilterIds.indexOf(currentId);
-      this.currentIndex = newIdx !== -1 ? newIdx : 0;
-      this.notifyListeners();
-    }
   }
 
   /**

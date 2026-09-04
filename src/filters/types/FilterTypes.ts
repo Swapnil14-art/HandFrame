@@ -5,7 +5,10 @@ export type FilterCategory =
   | 'Retro' 
   | 'Dreamy' 
   | 'Artistic' 
-  | 'Monochrome';
+  | 'Monochrome'
+  | 'Custom';
+
+export type FilterType = 'EXISTING_BUILT_IN' | 'COLOR_MATRIX' | 'CONVOLUTION';
 
 export interface FilterMetadata {
   id: string;
@@ -14,6 +17,7 @@ export interface FilterMetadata {
   category: FilterCategory;
   version: string;
   author?: string;
+  filterType?: FilterType;
 }
 
 export interface BaseFilter extends FilterMetadata {
