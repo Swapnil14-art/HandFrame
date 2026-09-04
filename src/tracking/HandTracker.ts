@@ -9,10 +9,10 @@ export type TrackingStatus =
   | 'TRACKING_DEGRADED';
 
 export interface HandFramePoints {
-  P1: Point2D; // RIGHT_THUMB (Landmark 4 of Right Hand)
-  P2: Point2D; // RIGHT_INDEX (Landmark 8 of Right Hand)
-  P3: Point2D; // LEFT_INDEX  (Landmark 8 of Left Hand)
-  P4: Point2D; // LEFT_THUMB  (Landmark 4 of Left Hand)
+  P1: Point2D; // LEFT_THUMB  (Landmark 4 of Left Hand)
+  P2: Point2D; // LEFT_INDEX  (Landmark 8 of Left Hand)
+  P3: Point2D; // RIGHT_INDEX (Landmark 8 of Right Hand)
+  P4: Point2D; // RIGHT_THUMB (Landmark 4 of Right Hand)
   confidence: number;
   status: TrackingStatus;
   isGraceFrame?: boolean;
@@ -27,6 +27,10 @@ export class HandTracker {
   private lastValidPoints: HandFramePoints | null = null;
   private graceFramesCount: number = 0;
   private readonly maxGraceFrames: number = 12; // ~350ms grace period at 30fps
+
+  // Temporal palm center tracking to prevent MediaPipe classification flips during 180° rotation
+  private lastLeftCenter: Point2D | null = null;
+  private lastRightCenter: Point2D | null = null;
 
   public async initialize(): Promise<void> {
     if (this.isReady || this.isInitializing) return;
@@ -87,13 +91,13 @@ export class HandTracker {
   }
 
   /**
-   * Detects 2 hands and extracts fingertips strictly in semantic identity order:
-   * [RIGHT_THUMB, RIGHT_INDEX, LEFT_INDEX, LEFT_THUMB]
+   * Detects 2 hands and extracts fingertips strictly in absolute semantic order:
+   * [LEFT_THUMB, LEFT_INDEX, RIGHT_INDEX, RIGHT_THUMB]
    */
   public detect(
     videoElement: HTMLVideoElement,
     timestamp: number,
-    isMirrored: boolean = false
+    _isMirrored: boolean = false
   ): HandFramePoints | null {
     if (!this.handLandmarker || !this.isReady) return null;
     if (videoElement.readyState < 2) return null;
@@ -116,6 +120,8 @@ export class HandTracker {
 
         // Grace period expired
         this.lastValidPoints = null;
+        this.lastLeftCenter = null;
+        this.lastRightCenter = null;
         this.graceFramesCount = 0;
         return null;
       }
@@ -126,68 +132,25 @@ export class HandTracker {
       const h0Label = results.handednesses?.[0]?.[0]?.categoryName; // 'Right' or 'Left'
       const h1Label = results.handednesses?.[1]?.[0]?.categoryName; // 'Right' or 'Left'
 
-      let rightHand = hand0;
-      let leftHand = hand1;
-
-      if (h0Label === 'Right' && h1Label === 'Left') {
-        rightHand = hand0;
-        leftHand = hand1;
-      } else if (h0Label === 'Left' && h1Label === 'Right') {
-        rightHand = hand1;
-        leftHand = hand0;
-      } else if (this.lastValidPoints) {
-        // Ambiguous handedness label from MediaPipe: match against previous frame Right vs Left
-        const prevRightCenter = {
-          x: (this.lastValidPoints.P1.x + this.lastValidPoints.P2.x) / 2,
-          y: (this.lastValidPoints.P1.y + this.lastValidPoints.P2.y) / 2,
-        };
-        const prevLeftCenter = {
-          x: (this.lastValidPoints.P3.x + this.lastValidPoints.P4.x) / 2,
-          y: (this.lastValidPoints.P3.y + this.lastValidPoints.P4.y) / 2,
-        };
-
-        const h0Center = { x: hand0[9].x, y: hand0[9].y };
-        const h1Center = { x: hand1[9].x, y: hand1[9].y };
-
-        const dist0ToRight = this.distSq(h0Center, prevRightCenter) + this.distSq(h1Center, prevLeftCenter);
-        const dist1ToRight = this.distSq(h1Center, prevRightCenter) + this.distSq(h0Center, prevLeftCenter);
-
-        if (dist1ToRight < dist0ToRight) {
-          rightHand = hand1;
-          leftHand = hand0;
-        } else {
-          rightHand = hand0;
-          leftHand = hand1;
-        }
-      } else {
-        // First frame fallback if MediaPipe labels are identical: sort by X coordinate
-        const h0x = hand0[9].x;
-        const h1x = hand1[9].x;
-        if (isMirrored ? h0x < h1x : h0x > h1x) {
-          rightHand = hand1;
-          leftHand = hand0;
-        } else {
-          rightHand = hand0;
-          leftHand = hand1;
-        }
-      }
+      const { leftHand, rightHand } = this.assignHands(hand0, hand1, h0Label, h1Label);
 
       // Confidence computation
       const score0 = results.handednesses?.[0]?.[0]?.score || 0.85;
       const score1 = results.handednesses?.[1]?.[0]?.score || 0.85;
       const confidence = (score0 + score1) / 2;
 
-      // Extract points strictly in semantic order: RIGHT_THUMB, RIGHT_INDEX, LEFT_INDEX, LEFT_THUMB
-      const rightThumb: Point2D = { x: rightHand[4].x, y: rightHand[4].y };
-      const rightIndex: Point2D = { x: rightHand[8].x, y: rightHand[8].y };
-      const leftIndex: Point2D  = { x: leftHand[8].x,  y: leftHand[8].y };
+      // Extract points strictly in absolute semantic order:
+      // LEFT_THUMB (landmark 4) → LEFT_INDEX (landmark 8) → RIGHT_INDEX (landmark 8) → RIGHT_THUMB (landmark 4)
       const leftThumb: Point2D  = { x: leftHand[4].x,  y: leftHand[4].y };
+      const leftIndex: Point2D  = { x: leftHand[8].x,  y: leftHand[8].y };
+      const rightIndex: Point2D = { x: rightHand[8].x, y: rightHand[8].y };
+      const rightThumb: Point2D = { x: rightHand[4].x, y: rightHand[4].y };
 
       const currentPoints: HandFramePoints = {
-        P1: rightThumb, // RIGHT_THUMB
-        P2: rightIndex, // RIGHT_INDEX
-        P3: leftIndex,  // LEFT_INDEX
-        P4: leftThumb,  // LEFT_THUMB
+        P1: leftThumb,   // LEFT_THUMB
+        P2: leftIndex,   // LEFT_INDEX
+        P3: rightIndex,  // RIGHT_INDEX
+        P4: rightThumb,  // RIGHT_THUMB
         confidence,
         status: 'TRACKING_STABLE',
         isGraceFrame: false,
@@ -211,6 +174,60 @@ export class HandTracker {
     }
   }
 
+  /**
+   * Assigns detected MediaPipe hands to Left Hand and Right Hand.
+   * Uses temporal palm center tracking to maintain identity when hands invert (rotate 180°).
+   */
+  private assignHands(
+    hand0: any[],
+    hand1: any[],
+    h0Label?: string,
+    h1Label?: string
+  ): { leftHand: any[]; rightHand: any[] } {
+    const h0Center = { x: hand0[9].x, y: hand0[9].y };
+    const h1Center = { x: hand1[9].x, y: hand1[9].y };
+
+    if (this.lastLeftCenter && this.lastRightCenter) {
+      const distA = this.distSq(h0Center, this.lastLeftCenter) + this.distSq(h1Center, this.lastRightCenter);
+      const distB = this.distSq(h1Center, this.lastLeftCenter) + this.distSq(h0Center, this.lastRightCenter);
+
+      if (distA <= distB) {
+        this.lastLeftCenter = h0Center;
+        this.lastRightCenter = h1Center;
+        return { leftHand: hand0, rightHand: hand1 };
+      } else {
+        this.lastLeftCenter = h1Center;
+        this.lastRightCenter = h0Center;
+        return { leftHand: hand1, rightHand: hand0 };
+      }
+    }
+
+    // Initial frame assignment (no previous history):
+    let leftHand = hand0;
+    let rightHand = hand1;
+
+    if (h0Label === 'Left' && h1Label === 'Right') {
+      leftHand = hand0;
+      rightHand = hand1;
+    } else if (h0Label === 'Right' && h1Label === 'Left') {
+      leftHand = hand1;
+      rightHand = hand0;
+    } else {
+      if (h0Center.x < h1Center.x) {
+        leftHand = hand0;
+        rightHand = hand1;
+      } else {
+        leftHand = hand1;
+        rightHand = hand0;
+      }
+    }
+
+    this.lastLeftCenter = { x: leftHand[9].x, y: leftHand[9].y };
+    this.lastRightCenter = { x: rightHand[9].x, y: rightHand[9].y };
+
+    return { leftHand, rightHand };
+  }
+
   private distSq(a: Point2D, b: Point2D): number {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
@@ -219,6 +236,8 @@ export class HandTracker {
 
   public resetHistory(): void {
     this.lastValidPoints = null;
+    this.lastLeftCenter = null;
+    this.lastRightCenter = null;
     this.graceFramesCount = 0;
   }
 

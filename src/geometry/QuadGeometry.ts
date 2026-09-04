@@ -1,10 +1,10 @@
 import { Point2D } from '../camera/CoordinateTransformer';
 
 export interface QuadPolygon {
-  P1: Point2D;
-  P2: Point2D;
-  P3: Point2D;
-  P4: Point2D;
+  P1: Point2D; // LEFT_THUMB
+  P2: Point2D; // LEFT_INDEX
+  P3: Point2D; // RIGHT_INDEX
+  P4: Point2D; // RIGHT_THUMB
 }
 
 export class QuadGeometry {
@@ -52,58 +52,6 @@ export class QuadGeometry {
   }
 
   /**
-   * Sorts quad vertices around their polar centroid to untangle self-intersecting bowtie shapes.
-   * Ensures tracking never freezes during extreme hand rotations or 180° inversion.
-   */
-  public static untangleConvexQuad(quad: QuadPolygon): QuadPolygon {
-    const pts = [quad.P1, quad.P2, quad.P3, quad.P4];
-    const cx = (quad.P1.x + quad.P2.x + quad.P3.x + quad.P4.x) / 4;
-    const cy = (quad.P1.y + quad.P2.y + quad.P3.y + quad.P4.y) / 4;
-
-    const sorted = [...pts].sort((a, b) => {
-      const angleA = Math.atan2(a.y - cy, a.x - cx);
-      const angleB = Math.atan2(b.y - cy, b.x - cx);
-      return angleA - angleB;
-    });
-
-    return {
-      P1: sorted[0],
-      P2: sorted[1],
-      P3: sorted[2],
-      P4: sorted[3],
-    };
-  }
-
-  /**
-   * Validates if quad points form a valid, non-self-intersecting convex polygon.
-   */
-  public static isValidConvexQuad(quad: QuadPolygon): boolean {
-    const pts = [quad.P1, quad.P2, quad.P3, quad.P4];
-    const n = pts.length;
-
-    let hasPositive = false;
-    let hasNegative = false;
-
-    for (let i = 0; i < n; i++) {
-      const p1 = pts[i];
-      const p2 = pts[(i + 1) % n];
-      const p3 = pts[(i + 2) % n];
-
-      const crossProduct = (p2.x - p1.x) * (p3.y - p2.y) - (p2.y - p1.y) * (p3.x - p2.x);
-
-      if (crossProduct > 0.001) hasPositive = true;
-      if (crossProduct < -0.001) hasNegative = true;
-
-      if (hasPositive && hasNegative) {
-        return false; // Self-intersecting or concave bowtie shape!
-      }
-    }
-
-    const area = this.getPolygonArea(quad);
-    return area >= 30;
-  }
-
-  /**
    * Calculates quadrilateral surface area using Shoelace formula.
    */
   public static getPolygonArea(quad: QuadPolygon): number {
@@ -119,7 +67,7 @@ export class QuadGeometry {
   }
 
   /**
-   * Calculates bounding box around quadrilateral.
+   * Calculates bounding box around quadrilateral to define canvas sub-region bounds.
    */
   public static getBoundingBox(
     quad: QuadPolygon,
