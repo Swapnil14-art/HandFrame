@@ -17,6 +17,7 @@ import { SpiderVerseFilter } from '../implementations/SpiderVerseFilter';
 import { RageShiftFilter } from '../implementations/RageShiftFilter';
 import { AnimeRageFilter } from '../implementations/AnimeRageFilter';
 import { SketchFilter } from '../implementations/SketchFilter';
+import { GlitchOutFilter } from '../implementations/GlitchOutFilter';
 
 // Additional Image Processing Filters
 import { SpectralMapFilter } from '../implementations/SpectralMapFilter';
@@ -50,6 +51,7 @@ export function createDefaultFilters(): BaseFilter[] {
     new RageShiftFilter(),
     new AnimeRageFilter(),
     new SketchFilter(),
+    new GlitchOutFilter(),
 
     // Real-Time Visual Filters
     new InfraredFilter(),
