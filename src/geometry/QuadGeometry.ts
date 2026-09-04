@@ -9,14 +9,27 @@ export interface QuadPolygon {
 
 export class QuadGeometry {
   /**
-   * Exponential moving average smoothing for quad points.
+   * Adaptive velocity-aware temporal smoothing.
+   * Dynamically adjusts alpha based on velocity to eliminate static jitter while keeping zero movement lag.
    */
   public static smoothQuad(
     current: QuadPolygon,
     previous: QuadPolygon | null,
-    alpha: number = 0.45
+    minAlpha: number = 0.3,
+    maxAlpha: number = 0.85
   ): QuadPolygon {
     if (!previous) return current;
+
+    // Calculate maximum movement speed among all 4 points
+    const d1 = this.dist(current.P1, previous.P1);
+    const d2 = this.dist(current.P2, previous.P2);
+    const d3 = this.dist(current.P3, previous.P3);
+    const d4 = this.dist(current.P4, previous.P4);
+    const maxMove = Math.max(d1, d2, d3, d4);
+
+    // Dynamic alpha: slow movement = minAlpha (silky smooth), fast movement = maxAlpha (instant response)
+    const velocityFactor = Math.min(1.0, maxMove / 45.0); // 45px speed cap
+    const alpha = minAlpha + (maxAlpha - minAlpha) * velocityFactor;
 
     return {
       P1: {
@@ -36,6 +49,36 @@ export class QuadGeometry {
         y: previous.P4.y + (current.P4.y - previous.P4.y) * alpha,
       },
     };
+  }
+
+  /**
+   * Validates if quad points form a valid, non-self-intersecting convex polygon.
+   */
+  public static isValidConvexQuad(quad: QuadPolygon): boolean {
+    const pts = [quad.P1, quad.P2, quad.P3, quad.P4];
+    const n = pts.length;
+
+    let hasPositive = false;
+    let hasNegative = false;
+
+    for (let i = 0; i < n; i++) {
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      const p3 = pts[(i + 2) % n];
+
+      const crossProduct = (p2.x - p1.x) * (p3.y - p2.y) - (p2.y - p1.y) * (p3.x - p2.x);
+
+      if (crossProduct > 0.001) hasPositive = true;
+      if (crossProduct < -0.001) hasNegative = true;
+
+      if (hasPositive && hasNegative) {
+        return false; // Self-intersecting or concave bowtie shape!
+      }
+    }
+
+    // Minimum area check
+    const area = this.getPolygonArea(quad);
+    return area >= 50; // At least 50 px^2 surface area
   }
 
   /**
@@ -79,5 +122,11 @@ export class QuadGeometry {
     const height = Math.max(1, maxY - minY);
 
     return { minX, minY, maxX, maxY, width, height };
+  }
+
+  private static dist(a: Point2D, b: Point2D): number {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 }

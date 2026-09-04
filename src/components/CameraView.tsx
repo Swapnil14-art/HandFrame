@@ -85,7 +85,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
         // 2. Start Camera
         setLoadingText('Requesting Camera Stream...');
-        const stream = await cameraManagerRef.current.startCamera(videoRef.current, 'user');
+        await cameraManagerRef.current.startCamera(videoRef.current, 'user');
         if (!isMounted) return;
 
         // 3. Initialize MediaPipe Hand Tracker WASM
@@ -168,8 +168,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const isMirrored = cameraManagerRef.current.isMirrored();
 
-          // 1. Detect Hand Landmarks
-          const landmarksResult = tracker.detect(video, timestamp);
+          // 1. Detect Hand Landmarks (with temporal grace period & outlier rejection)
+          const landmarksResult = tracker.detect(video, timestamp, isMirrored);
 
           let quad: QuadPolygon | null = null;
           if (landmarksResult) {
@@ -190,14 +190,20 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               P4: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P4, transformConfig),
             };
 
-            // Apply spatial smoothing
-            quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current);
-            lastQuadRef.current = quad;
+            // Validate convexity and area before rendering
+            if (QuadGeometry.isValidConvexQuad(rawQuad)) {
+              // Apply velocity-aware adaptive spatial smoothing
+              quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current);
+              lastQuadRef.current = quad;
+            } else if (lastQuadRef.current) {
+              // Retain last valid quad if single frame is non-convex
+              quad = lastQuadRef.current;
+            }
           } else {
             lastQuadRef.current = null;
           }
 
-          // 2. Process Gesture State Machine
+          // 2. Process Gesture State Machine (Centroid Convergence Metric + Cooldown)
           const gestureResult = gestureControllerRef.current.processFrame(
             landmarksResult
               ? {
@@ -206,7 +212,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
                   P3: landmarksResult.P3,
                   P4: landmarksResult.P4,
                 }
-              : null
+              : null,
+            startTime
           );
 
           // 3. Render Canvas & Apply Regional Filter
@@ -224,7 +231,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const latencyMs = Math.round(performance.now() - startTime);
 
-          // Update debug state once per sec or if debug panel open
+          // Update debug state periodically if debug panel is open
           if (isDebugOpen && Math.random() < 0.1) {
             setDebugData({
               fps: currentFpsRef.current,

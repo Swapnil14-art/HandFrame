@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FilterSessionStore } from '../store/FilterSessionStore';
 import { BaseFilter } from '../filters/types/FilterTypes';
 import {
   ArrowLeft,
-  Check,
-  X,
+  Plus,
+  Trash2,
   ChevronUp,
   ChevronDown,
   RotateCcw,
@@ -12,6 +12,7 @@ import {
   Layers,
   Sparkles,
   Info,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface UnlistedFilterEditorProps {
@@ -24,12 +25,11 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
   onGoHome,
 }) => {
   const sessionStore = FilterSessionStore.getInstance();
-  const [allBuiltInFilters, setAllBuiltInFilters] = useState<BaseFilter[]>([]);
+  const [allFilters, setAllFilters] = useState<BaseFilter[]>([]);
   const [activeFilterIds, setActiveFilterIds] = useState<string[]>([]);
-  const [sampleCanvasReady, setSampleCanvasReady] = useState(false);
 
   useEffect(() => {
-    setAllBuiltInFilters(sessionStore.getAllBuiltInFilters());
+    setAllFilters(sessionStore.getAllBuiltInFilters());
     setActiveFilterIds(sessionStore.getActiveFilterIds());
 
     const unsubscribe = sessionStore.subscribe(() => {
@@ -39,17 +39,25 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
     return () => unsubscribe();
   }, []);
 
-  const handleToggle = (id: string) => {
+  const activeFilters = activeFilterIds
+    .map((id) => allFilters.find((f) => f.id === id))
+    .filter((f): f is BaseFilter => f !== undefined);
+
+  const availableFilters = allFilters.filter((f) => !activeFilterIds.includes(f.id));
+
+  const handleAddFilter = (id: string) => {
     sessionStore.toggleFilter(id);
   };
 
-  const handleMoveUp = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRemoveFilter = (id: string) => {
+    sessionStore.toggleFilter(id);
+  };
+
+  const handleMoveUp = (id: string) => {
     sessionStore.moveFilterUp(id);
   };
 
-  const handleMoveDown = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleMoveDown = (id: string) => {
     sessionStore.moveFilterDown(id);
   };
 
@@ -58,15 +66,14 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
   };
 
   return (
-    <div className="min-h-dvh bg-black text-white p-4 md:p-8 flex flex-col items-center select-none overflow-y-auto">
-      {/* Container */}
-      <div className="w-full max-w-2xl mx-auto space-y-6">
+    <div className="h-dvh w-full bg-black text-white overflow-y-auto select-none">
+      <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-8 pb-16">
         {/* Header */}
         <header className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
             <button
               onClick={onGoHome}
-              className="w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all"
+              className="w-9 h-9 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-95"
               title="Return Home"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -84,68 +91,127 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
 
           <button
             onClick={onLaunchCamera}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold rounded-full hover:bg-white/90 active:scale-95 transition-all shadow-lg"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold rounded-full hover:bg-white/90 active:scale-95 transition-all shadow-lg shrink-0"
           >
             <Camera className="w-3.5 h-3.5" />
             <span>Launch Camera</span>
           </button>
         </header>
 
-        {/* Temporary State Banner Callout */}
-        <div className="bg-zinc-900/80 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200/90 flex gap-3 items-start backdrop-blur-md">
+        {/* In-Memory Session Banner Callout */}
+        <div className="bg-zinc-900/90 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200/90 flex gap-3 items-start backdrop-blur-md">
           <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-semibold text-amber-300">Session-Only Temporary Configuration</p>
             <p className="text-amber-200/70 text-[11px] leading-relaxed">
-              Modifications here affect only your current local browser session. Temporary changes live strictly in-memory and will <strong>automatically reset to defaults upon reloading or refreshing the page</strong>.
+              Modifications here apply only to your <strong>currently loaded webpage session</strong>. Temporary changes live strictly in-memory and will <strong>automatically reset to default settings upon reloading or refreshing the page</strong>.
             </p>
           </div>
         </div>
 
-        {/* Actions Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-white/60">
-            <Layers className="w-4 h-4 text-white/40" />
-            <span>
-              <strong className="text-white">{activeFilterIds.length}</strong> of {allBuiltInFilters.length} Built-in Filters Active
-            </span>
+        {/* Active Filters Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold text-white tracking-wide">
+                Active Gesture Cycle ({activeFilters.length})
+              </h2>
+            </div>
+
+            <button
+              onClick={handleResetToDefaults}
+              className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Defaults</span>
+            </button>
           </div>
 
-          <button
-            onClick={handleResetToDefaults}
-            className="flex items-center gap-1.5 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Defaults</span>
-          </button>
-        </div>
-
-        {/* Filter List Grid */}
-        <div className="space-y-2.5">
-          {allBuiltInFilters.map((filter, index) => {
-            const isActive = activeFilterIds.includes(filter.id);
-            const activeIndex = activeFilterIds.indexOf(filter.id);
-
-            return (
-              <div
-                key={filter.id}
-                onClick={() => handleToggle(filter.id)}
-                className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-zinc-900/90 border-white/20 shadow-md'
-                    : 'bg-zinc-950/40 border-white/5 opacity-50 hover:opacity-80'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  {/* Status Toggle Button */}
-                  <div
-                    className={`w-6 h-6 rounded-md flex items-center justify-center text-xs transition-colors ${
-                      isActive ? 'bg-white text-black font-bold' : 'bg-white/10 text-white/40'
-                    }`}
-                  >
-                    {isActive ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+          {activeFilters.length === 0 ? (
+            <div className="p-6 text-center text-xs text-white/40 border border-dashed border-white/10 rounded-xl">
+              No filters currently active in cycle. Add filters from below.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {activeFilters.map((filter, index) => (
+                <div
+                  key={filter.id}
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900 border border-white/15 shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center font-mono text-xs font-semibold text-white/80">
+                      #{index + 1}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">{filter.displayName}</span>
+                        <span className="text-[10px] font-mono text-white/40 bg-white/5 px-2 py-0.5 rounded">
+                          {filter.category}
+                        </span>
+                      </div>
+                      <p className="text-xs text-white/50 mt-0.5">{filter.description}</p>
+                    </div>
                   </div>
 
+                  {/* Actions: Reorder & Remove */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/10">
+                      <button
+                        onClick={() => handleMoveUp(filter.id)}
+                        disabled={index === 0}
+                        className="p-1 rounded text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-20 transition-all"
+                        title="Move Up"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveDown(filter.id)}
+                        disabled={index === activeFilters.length - 1}
+                        className="p-1 rounded text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-20 transition-all"
+                        title="Move Down"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => handleRemoveFilter(filter.id)}
+                      disabled={activeFilters.length <= 1}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-medium transition-all disabled:opacity-30 disabled:hover:bg-rose-500/10"
+                      title={activeFilters.length <= 1 ? 'Minimum 1 filter required' : 'Remove Filter'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Available Built-in Filters Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+            <Sparkles className="w-4 h-4 text-white/60" />
+            <h2 className="text-sm font-semibold text-white tracking-wide">
+              Available Built-in Filters ({availableFilters.length})
+            </h2>
+          </div>
+
+          {availableFilters.length === 0 ? (
+            <div className="p-6 text-center text-xs text-emerald-400/80 bg-emerald-950/20 border border-emerald-500/20 rounded-xl flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>All built-in filters are currently added to the gesture cycle.</span>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {availableFilters.map((filter) => (
+                <div
+                  key={filter.id}
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-white/10 hover:border-white/20 opacity-80 hover:opacity-100 transition-all"
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-white">{filter.displayName}</span>
@@ -155,39 +221,25 @@ export const UnlistedFilterEditor: React.FC<UnlistedFilterEditorProps> = ({
                     </div>
                     <p className="text-xs text-white/50 mt-0.5">{filter.description}</p>
                   </div>
-                </div>
 
-                {/* Reordering Controls (Only if active) */}
-                {isActive && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-mono text-white/40 mr-2">#{activeIndex + 1}</span>
-                    <button
-                      onClick={(e) => handleMoveUp(filter.id, e)}
-                      disabled={activeIndex === 0}
-                      className="p-1 rounded text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-transparent"
-                      title="Move Up in Cycle Order"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => handleMoveDown(filter.id, e)}
-                      disabled={activeIndex === activeFilterIds.length - 1}
-                      className="p-1 rounded text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-transparent"
-                      title="Move Down in Cycle Order"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  {/* Explicit Add Button */}
+                  <button
+                    onClick={() => handleAddFilter(filter.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-medium transition-all shrink-0 active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Filter</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Footer info */}
-        <div className="text-center pt-4 border-t border-white/10 text-xs text-white/30">
-          HandFrame Built-in Filter Registry Interface — Session Override Mode
-        </div>
+        <footer className="text-center pt-6 border-t border-white/10 text-xs text-white/30">
+          HandFrame Built-in Filter Registry Interface — Temporary Session Configuration
+        </footer>
       </div>
     </div>
   );
