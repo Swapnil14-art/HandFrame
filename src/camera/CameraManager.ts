@@ -12,7 +12,7 @@ export class CameraManager {
 
   /**
    * Initializes camera stream on target HTML5 video element.
-   * Implements progressive fallback constraints to ensure compatibility across mobile devices & desktop browsers.
+   * Enforces standard W3C Secure Context requirements for navigator.mediaDevices.getUserMedia().
    */
   public async startCamera(
     videoElement: HTMLVideoElement,
@@ -21,7 +21,7 @@ export class CameraManager {
     this.videoElement = videoElement;
     this.currentFacingMode = preferredFacingMode;
 
-    // Ensure required iOS Safari attributes are set on HTMLVideoElement
+    // Ensure required mobile Safari & Chrome inline autoplay attributes
     videoElement.setAttribute('playsinline', 'true');
     videoElement.setAttribute('muted', 'true');
     videoElement.setAttribute('autoplay', 'true');
@@ -31,13 +31,23 @@ export class CameraManager {
     // Stop existing stream if active
     this.stopCamera();
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error(
-        'SECURITY_CONTEXT_REQUIRED: Camera access requires HTTPS or localhost. navigator.mediaDevices is unavailable in plain HTTP on mobile browsers.'
-      );
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname === '[::1]';
+
+    const isSecureContext =
+      window.isSecureContext === true ||
+      window.location.protocol === 'https:' ||
+      isLocalhost;
+
+    if (!isSecureContext || !navigator?.mediaDevices?.getUserMedia) {
+      const portSuffix = window.location.port ? `:${window.location.port}` : '';
+      const httpsUrl = `https://${window.location.hostname}${portSuffix}${window.location.pathname}${window.location.hash}`;
+      throw new Error(`SECURE_CONTEXT_REQUIRED|${httpsUrl}`);
     }
 
-    // Progressive Constraint Levels to prevent OverconstrainedError on Mobile
+    // Progressive Constraint Levels to prevent OverconstrainedError on Mobile & Desktop
     const constraintLevels: MediaStreamConstraints[] = [
       // Level 1: Mobile-optimized ideal resolution & facing mode
       {
@@ -118,7 +128,7 @@ export class CameraManager {
    * Enumerates available video input devices.
    */
   public async getCameraDevices(): Promise<CameraDevice[]> {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+    if (!navigator?.mediaDevices?.enumerateDevices) {
       return [];
     }
 

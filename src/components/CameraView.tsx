@@ -16,6 +16,7 @@ import {
   Bug,
   Sparkles,
   AlertCircle,
+  Lock,
 } from 'lucide-react';
 
 interface CameraViewProps {
@@ -29,6 +30,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingText, setLoadingText] = useState('Initializing HandFrame Engine...');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [redirectHttpsUrl, setRedirectHttpsUrl] = useState<string | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -80,13 +82,14 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       try {
         if (!videoRef.current || !canvasRef.current) return;
         setErrorMessage(null);
+        setRedirectHttpsUrl(null);
         setIsLoading(true);
 
         // 1. Initialize Compositor
         compositorRef.current = new QuadCompositor();
 
-        // 2. Start Camera with mobile fallbacks & iOS Safari attributes
-        setLoadingText('Requesting Mobile Camera Stream...');
+        // 2. Start Camera after explicit user interaction ("Start HandFrame")
+        setLoadingText('Requesting Camera Stream...');
         await cameraManagerRef.current.startCamera(videoRef.current, 'user');
         if (!isMounted) return;
 
@@ -109,16 +112,19 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         console.error('HandFrame engine initialization error:', err);
         if (isMounted) {
           setIsLoading(false);
-          if (err?.message?.includes('SECURITY_CONTEXT_REQUIRED')) {
+          if (err?.message?.startsWith('SECURE_CONTEXT_REQUIRED')) {
+            const parts = err.message.split('|');
+            const targetUrl = parts[1] || '';
+            setRedirectHttpsUrl(targetUrl);
             setErrorMessage(
-              'Camera access requires HTTPS or localhost on mobile browsers. Mobile Safari and Chrome block WebRTC camera access over HTTP IP addresses.'
+              'Camera access requires a Secure Context (HTTPS or localhost). Web browsers block camera access over plain HTTP network addresses.'
             );
           } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            setErrorMessage('Camera access was denied. Please allow camera permissions in your mobile browser settings to use HandFrame.');
+            setErrorMessage('Camera access was denied. Please allow camera permission in your browser site settings and retry.');
           } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
             setErrorMessage('No camera hardware was detected on your device.');
           } else {
-            setErrorMessage('Failed to initialize mobile camera. Please ensure camera permissions are granted and retry.');
+            setErrorMessage('Failed to initialize local camera stream. Please ensure camera permissions are granted.');
           }
         }
       }
@@ -326,19 +332,35 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       {/* Error Overlay */}
       {errorMessage && (
         <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 text-center">
-          <AlertCircle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
-          <h2 className="text-white text-lg font-semibold mb-2">Camera Access Issue</h2>
+          {redirectHttpsUrl ? (
+            <Lock className="w-12 h-12 text-amber-400 mb-4 animate-pulse" />
+          ) : (
+            <AlertCircle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
+          )}
+          <h2 className="text-white text-lg font-semibold mb-2">
+            {redirectHttpsUrl ? 'HTTPS Security Required' : 'Camera Access Issue'}
+          </h2>
           <p className="text-white/70 text-xs max-w-sm mb-6 leading-relaxed">{errorMessage}</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-5 py-2.5 bg-emerald-500 text-black text-xs font-semibold rounded-full hover:bg-emerald-400 transition-all"
-            >
-              Retry Camera
-            </button>
+
+          <div className="flex flex-wrap justify-center gap-3">
+            {redirectHttpsUrl ? (
+              <button
+                onClick={() => (window.location.href = redirectHttpsUrl)}
+                className="px-5 py-2.5 bg-emerald-500 text-black text-xs font-semibold rounded-full hover:bg-emerald-400 transition-all shadow-lg active:scale-95"
+              >
+                Switch to HTTPS Version
+              </button>
+            ) : (
+              <button
+                onClick={() => window.location.reload()}
+                className="px-5 py-2.5 bg-emerald-500 text-black text-xs font-semibold rounded-full hover:bg-emerald-400 transition-all shadow-lg active:scale-95"
+              >
+                Retry Camera
+              </button>
+            )}
             <button
               onClick={onBackToLanding}
-              className="px-5 py-2.5 bg-white/10 text-white border border-white/20 text-xs font-semibold rounded-full hover:bg-white/20 transition-all"
+              className="px-5 py-2.5 bg-white/10 text-white border border-white/20 text-xs font-semibold rounded-full hover:bg-white/20 transition-all active:scale-95"
             >
               Back to Landing
             </button>
