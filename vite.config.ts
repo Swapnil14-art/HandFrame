@@ -11,34 +11,46 @@ function handframeLanBannerPlugin(): Plugin {
         const address = server.httpServer?.address();
         const port = typeof address === 'object' && address ? address.port : 5173;
 
-        // Detect non-internal IPv4 LAN interfaces
+        // Detect non-internal physical IPv4 LAN interfaces (filtering out virtual adapters)
         const interfaces = os.networkInterfaces();
-        const lanIps: string[] = [];
+        const physicalLanIps: { ip: string; name: string }[] = [];
 
         for (const name of Object.keys(interfaces)) {
+          const lowerName = name.toLowerCase();
+          // Filter out WSL, Hyper-V, Docker, VMware, VirtualBox, and virtual gateway adapters
+          if (
+            /wsl|hyper-v|vethernet|vgate|vmnet|virtual|docker|loopback/i.test(lowerName)
+          ) {
+            continue;
+          }
+
           for (const net of interfaces[name] || []) {
             if (net.family === 'IPv4' && !net.internal) {
-              lanIps.push(net.address);
+              physicalLanIps.push({ ip: net.address, name });
             }
           }
         }
 
-        // Prioritize Wi-Fi or local LAN subnet (e.g. 192.168.x.x or 10.x.x.x)
-        const primaryLan =
-          lanIps.find((ip) => ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.')) ||
-          lanIps[0] ||
-          '192.168.x.x';
+        const primaryLan = physicalLanIps[0]?.ip || '10.x.x.x';
 
         console.log('\n===================================================================');
         console.log('                 HANDFRAME LAN DEV SERVER RUNNING                  ');
         console.log('===================================================================');
         console.log(`\n  ➜ Local Laptop: https://localhost:${port}/`);
         console.log(`  ➜ Mobile LAN:   https://${primaryLan}:${port}/`);
+
+        if (physicalLanIps.length > 1) {
+          console.log('\n  Other Physical Interfaces:');
+          physicalLanIps.slice(1).forEach((item) => {
+            console.log(`  ➜ ${item.name}: https://${item.ip}:${port}/`);
+          });
+        }
+
         console.log('\n===================================================================');
-        console.log('  MOBILE TESTING INSTRUCTIONS (PHONE):');
+        console.log('  MOBILE CONNECTIVITY INSTRUCTIONS (PHONE):');
         console.log('  1. Connect phone to the SAME Wi-Fi network as this laptop.');
         console.log(`  2. Open https://${primaryLan}:${port}/ on Safari (iOS) or Chrome (Android).`);
-        console.log('  3. Bypass local SSL warning ("Advanced -> Proceed to site").');
+        console.log('  3. If browser shows SSL warning: Tap "Advanced" -> "Proceed to site".');
         console.log('  4. Tap "Start HandFrame" to grant camera access.');
         console.log('===================================================================\n');
       });
