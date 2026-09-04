@@ -3,7 +3,7 @@ import { BaseFilter } from '../types/FilterTypes';
 export class InfraredFilter implements BaseFilter {
   public id = 'infrared';
   public displayName = 'Infrared';
-  public description = 'iOS-inspired false-color infrared thermal simulation preserving facial & hand structure';
+  public description = 'False-color infrared thermal simulation';
   public category = 'Cinematic' as const;
   public version = '1.0.0';
 
