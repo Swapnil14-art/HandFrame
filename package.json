@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "diagnose:lan": "node scripts/diagnose-lan.mjs",
+    "firewall:open": "powershell -Command \"Start-Process cmd -ArgumentList '/c scripts\\firewall-open.bat' -Verb RunAs\"",
+    "firewall:close": "powershell -Command \"Start-Process cmd -ArgumentList '/c scripts\\firewall-close.bat' -Verb RunAs\""
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.18",
@@ -17,7 +20,6 @@
   "devDependencies": {
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
