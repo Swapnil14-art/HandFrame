@@ -8,6 +8,17 @@ import { VhsFilter } from '../implementations/VhsFilter';
 import { PixelateFilter } from '../implementations/PixelateFilter';
 import { NegativeFilter } from '../implementations/NegativeFilter';
 import { GrayscaleFilter } from '../implementations/GrayscaleFilter';
+import { SpectralMapFilter } from '../implementations/SpectralMapFilter';
+import { ThresholdFilter } from '../implementations/ThresholdFilter';
+import { RgbSplitFilter } from '../implementations/RgbSplitFilter';
+import { LightGlowFilter } from '../implementations/LightGlowFilter';
+import { PaletteMapFilter } from '../implementations/PaletteMapFilter';
+import { PosterizeFilter } from '../implementations/PosterizeFilter';
+import { RaysFilter } from '../implementations/RaysFilter';
+import { BwDazeFilter } from '../implementations/BwDazeFilter';
+import { ReverseHeatmapFilter } from '../implementations/ReverseHeatmapFilter';
+import { GreenPixelFilter } from '../implementations/GreenPixelFilter';
+import { MonoColorsFilter } from '../implementations/MonoColorsFilter';
 
 export function createDefaultFilters(): BaseFilter[] {
   return [
@@ -20,5 +31,16 @@ export function createDefaultFilters(): BaseFilter[] {
     new PixelateFilter(),
     new NegativeFilter(),
     new GrayscaleFilter(),
+    new SpectralMapFilter(),
+    new ThresholdFilter(),
+    new RgbSplitFilter(),
+    new LightGlowFilter(),
+    new PaletteMapFilter(),
+    new PosterizeFilter(),
+    new RaysFilter(),
+    new BwDazeFilter(),
+    new ReverseHeatmapFilter(),
+    new GreenPixelFilter(),
+    new MonoColorsFilter(),
   ];
 }

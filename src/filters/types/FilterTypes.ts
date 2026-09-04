@@ -6,6 +6,7 @@ export type FilterCategory =
   | 'Dreamy' 
   | 'Artistic' 
   | 'Monochrome'
+  | 'Effect'
   | 'Custom';
 
 export type FilterType = 'EXISTING_BUILT_IN' | 'COLOR_MATRIX' | 'CONVOLUTION';
