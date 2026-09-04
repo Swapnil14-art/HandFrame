@@ -1,99 +1,94 @@
-# HandFrame — Web-First Application & Filter System Specification
+# HandFrame — Web Application Technical Specification
 
-**Document Version:** 3.0.0 (Web-First, Fullscreen Browser Architecture)  
-**Author:** Senior Software Architect & Computer Vision Engineer  
+**Document Version:** 6.0.0 (Web-First, Fullscreen Camera & Temporary Local Filter Management)  
 **Status:** Approved Specification (Single Source of Truth)  
-**Target Platform:** Web Browsers (Desktop & Mobile Front/Rear Cameras)  
+**Target Platform:** Modern Web Browsers (Desktop & Mobile Devices)  
 
 ---
 
-## 1. EXECUTIVE SUMMARY & PLATFORM CHANGE
+## 1. EXECUTIVE SUMMARY & PRODUCT DEFINITION
 
 ### 1.1 What HandFrame Is
-**HandFrame** is a real-time, web-first computer vision application that allows users to create a dynamic visual frame using their hands. By tracking four specific physical hand landmarks—the left index fingertip, left thumb tip, right index fingertip, and right thumb tip—the system constructs a dynamic quadrilateral region on the camera stream. A modular visual filter is applied **exclusively inside this region**, while the exterior background video feed remains untouched.
+**HandFrame** is a browser-based, local-first creative camera web application. It uses the device camera and computer vision hand tracking to create a dynamic four-point visual frame between the user's fingers. 
 
-### 1.2 Web-First Architectural Pivot
-HandFrame has transitioned from a desktop application (PySide6/Python) to a **web-first, browser-based application**. It delivers a zero-installation, instant-access, local-first camera experience directly in modern desktop and mobile browsers.
-
-```
-[ STACK SPECIFICATION ]
-- Core Framework: React 18+
-- Language: TypeScript 5+
-- Build Tool: Vite
-- Styling: Tailwind CSS (with arbitrary values & safe-area utilities)
-- Hand Landmarker: MediaPipe Tasks Vision (@mediapipe/tasks-vision)
-- Camera Access: WebRTC navigator.mediaDevices.getUserMedia()
-- Image Processing & Compositing: HTML5 Canvas 2D Context / WebGL
-- Configuration Persistence: Browser LocalStorage
-```
-
-### 1.3 Why Browser Local-First Processing Is Mandatory
-All video capture, hand tracking, coordinate geometry, filter application, and canvas compositing occur **100% locally in the user's browser runtime**.
-
-- **Ultra-Low Latency**: Eliminates network round-trips to maintain 30–60 FPS real-time rendering.
-- **Privacy First**: Video streams and camera frames never leave the user's device memory.
-- **Zero Server Infrastructure**: Operates entirely client-side without cloud API costs or backend processing servers.
-- **Offline Reliability**: Executes offline once browser static assets and MediaPipe WASM bundles are cached.
-
-### 1.4 Explicit Architectural Non-Goals
-```
-[ STRICT CONSTRAINTS CHECKLIST ]
-❌ NO Python / PySide6 / Desktop Native Wrappers
-❌ NO Backend Servers / Node API Dependencies
-❌ NO Face/Identity/AR Filters (dog ears, makeup, face morphing)
-❌ NO Cloud AI Services / OpenAI API / Generative AI
-❌ NO TensorFlow / PyTorch / YOLO Heavy ML Frameworks
-```
-
----
-
-## 2. FULLSCREEN CAMERA EXPERIENCE & UI/UX DIRECTION
-
-### 2.1 Viewport Dominance (`100dvh`)
-The camera feed is the **primary hero experience** of HandFrame. When active, the camera view occupies the entire viewport across desktop and mobile devices without page scrolling.
-
-- **Desktop Viewport**: `100vw` × `100dvh` edge-to-edge canvas with floating, non-intrusive UI controls.
-- **Mobile Viewport**: Portrait-first, `100vw` × `100dvh` responsive viewport honoring device safe-area insets (`env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`).
-- **No Page Scroll**: `overflow: hidden` on root containers to prevent accidental mobile gesture scrolling or rubber-banding.
-
-### 2.2 Minimal, Premium Design Philosophy
-HandFrame follows an **Aesthetic + Minimal + Premium + Unobtrusive** visual design language:
-> **"Simple does not mean empty. The goal is a highly polished creative experience with very little UI."**
-
-- **Camera as Hero**: The interface feels almost invisible during active framing. Controls float tastefully above the video canvas using subtle translucency (`backdrop-blur-md bg-black/40`), refined typography, and smooth micro-interactions.
-- **No SaaS Clutter**: Avoid dashboard layouts, excessive card panels, aggressive gradients, heavy borders, dense toolbars, or unnecessary icons.
-- **Auto-Hiding Controls**: Overlay controls subtly dim or hide after 3 seconds of inactivity and reappear on tap/hover/mouse move.
-- **Filter Change Toast**: When a gesture triggers a filter change, a minimal filter name label (e.g. `MOODY`) appears briefly at top-center and smoothly fades out over 1.2 seconds.
-
-### 2.3 Comprehensive Coordinate Transformation System
-The application must dynamically transform coordinates across the processing pipeline:
+The application tracks four key physical hand landmarks—the left index fingertip, left thumb tip, right index fingertip, and right thumb tip—to define a dynamic quadrilateral region in real time. A selected visual filter is rendered **exclusively inside this quadrilateral region**, while the exterior background video feed remains untouched.
 
 ```text
-Camera Video Stream (Native Resolution W_cam x H_cam)
-                       ↓
-  Displayed HTML5 <video> Element (Object-fit Cover/Contain)
-                       ↓
-  Render Canvas (<canvas> W_canvas x H_canvas)
-                       ↓
-  MediaPipe Normalized Hand Landmarks (x_norm, y_norm ∈ [0.0, 1.0])
-                       ↓
-  HandFrame Quadrilateral Pixel Coordinates (P1, P2, P3, P4)
+Original Camera Feed (Background)
+  ┌───────────────────────────────────────────────────┐
+  │                                                   │
+  │             P1 (Left Index)     P2 (Right Index)  │
+  │                o-----------------o                │
+  │               /   HandFrame     /                 │
+  │              /  FILTER APPLIED /                  │
+  │             o-----------------o                   │
+  │             P4 (Left Thumb)     P3 (Right Thumb)  │
+  │                                                   │
+  └───────────────────────────────────────────────────┘
 ```
 
-The transformation matrix must correctly handle:
-1. **Front-Facing Mirrored Cameras**: Horizontal flipping (`scaleX(-1)`) mapped seamlessly to canvas space.
-2. **Rear-Facing Mobile Cameras**: Standard non-mirrored coordinate mapping.
-3. **Aspect Ratio Discrepancies**: Letterboxing/cropping calculations (`object-fit: cover` vs `contain`).
-4. **Orientation Shifts**: Seamless recalculation when mobile devices rotate between portrait and landscape.
+### 1.2 Web-First Architecture
+HandFrame is designed ground-up as a responsive web application. The legacy desktop architecture (PySide6, Tkinter, Python desktop wrappers) is completely superseded by a modern browser-native frontend stack. HandFrame operates as a zero-installation, browser-based, local-first web application.
 
 ---
 
-## 3. HANDFRAME CORE FUNCTIONALITY (PRESERVED)
+## 2. TARGET TECHNOLOGY STACK
 
-### 3.1 4-Point Landmark Detection
-HandFrame isolates four specific fingertip landmarks from MediaPipe Tasks Vision (`HandLandmarker`):
+The preferred technology stack for the web implementation is strictly client-side:
 
-```
+### 2.1 Frontend Framework & Build System
+* **Framework:** React 18+
+* **Language:** TypeScript 5+
+* **Build Tool:** Vite
+* **Styling:** Tailwind CSS (with responsive dynamic viewport & safe-area utilities)
+
+### 2.2 Camera Access & Stream Management
+* **WebRTC API:** `navigator.mediaDevices.getUserMedia()`
+* **Stream Handling:** HTML5 `<video>` element with media stream bindings and track control
+
+### 2.3 Computer Vision & Hand Tracking
+* **Tracking Library:** MediaPipe Tasks Vision (`@mediapipe/tasks-vision` / `HandLandmarker`)
+* **Execution Environment:** Client-side WebAssembly (WASM) running locally in a browser worker thread
+
+> **Strict Machine Learning Scope:** MediaPipe is used exclusively for local hand landmark detection. Do NOT introduce heavy ML frameworks (TensorFlow, PyTorch, YOLO), cloud AI services, OpenAI APIs, or generative AI.
+
+### 2.4 Rendering & Compositing
+* **Primary Rendering Engine:** HTML5 2D Canvas (`CanvasRenderingContext2D`)
+* **Accelerated Effects:** WebGL used selectively only when it provides a meaningful performance improvement for expensive visual filters. Do not introduce unnecessary rendering frameworks merely for complexity.
+
+### 2.5 Route Environment Configuration
+* **Environment Variable:** Route configuration for the unlisted filter management page must be configurable via environment variables (e.g. `import.meta.env.VITE_FILTER_EDITOR_PATH`), defaulting to `/aesthetic14`.
+
+### 2.6 Persistence & Backend Requirement
+* **Backend Requirement:** None. No user registration, authentication, database, or backend server is required.
+* **Storage Policy:** Built-in filter registry serves as default configuration. The special filter editor uses in-memory temporary session state that resets automatically on page reload.
+
+---
+
+## 3. LOCAL-FIRST CAMERA PROCESSING
+
+All camera stream capture, hand landmarker tracking, coordinate mapping, filter processing, and canvas compositing execute **100% locally inside the user's browser runtime**. The live camera stream is **never** transmitted to any server.
+
+### Key Advantages:
+* **Ultra-Low Latency:** Eliminates network round-trip overhead to achieve real-time 30–60 FPS rendering.
+* **Total Privacy:** Camera frames remain strictly in local memory and are never stored or transmitted.
+* **Real-Time Responsiveness:** Provides instant visual feedback in sync with natural hand movements.
+* **Reduced Infrastructure:** Operates client-side with zero cloud processing or server bandwidth costs.
+* **Offline Functionality:** Functions completely offline once static application assets and MediaPipe WASM bundles are cached by the browser.
+
+---
+
+## 4. HANDFRAME CORE CONCEPT & GEOMETRY
+
+### 4.1 Tracked Fingertip Landmarks
+HandFrame isolates exactly **four fingertip landmarks** from the MediaPipe Hand Landmarker output:
+
+1. **P1 — Left Index Fingertip:** (`INDEX_FINGER_TIP`, Landmark ID: 8)
+2. **P2 — Right Index Fingertip:** (`INDEX_FINGER_TIP`, Landmark ID: 8)
+3. **P3 — Right Thumb Fingertip:** (`THUMB_TIP`, Landmark ID: 4)
+4. **P4 — Left Thumb Fingertip:** (`THUMB_TIP`, Landmark ID: 4)
+
+```text
        [Left Index Tip] (ID: 8)         [Right Index Tip] (ID: 8)
                 P1                              P2
                  o------------------------------o
@@ -105,238 +100,466 @@ HandFrame isolates four specific fingertip landmarks from MediaPipe Tasks Vision
        [Left Thumb Tip] (ID: 4)         [Right Thumb Tip] (ID: 4)
 ```
 
-- **P1**: Left Hand Index Fingertip (`INDEX_FINGER_TIP`, ID: 8)
-- **P2**: Right Hand Index Fingertip (`INDEX_FINGER_TIP`, ID: 8)
-- **P3**: Right Hand Thumb Tip (`THUMB_TIP`, ID: 4)
-- **P4**: Left Hand Thumb Tip (`THUMB_TIP`, ID: 4)
+### 4.2 Dynamic Quadrilateral Region
+* The four vertices $P_1, P_2, P_3, P_4$ form a dynamic, non-rigid quadrilateral polygon.
+* The selected visual filter is calculated and rendered **strictly inside this quadrilateral**.
+* Everything outside the quadrilateral remains original, unedited camera feed.
+* The quadrilateral can move, rotate, resize, stretch, and warp freely as the user's hands move. It is **not assumed to be rectangular** or axis-aligned.
 
-### 3.2 Dynamic Quadrilateral Region
-- The 4 points form a dynamic polygon (quadrilateral).
-- The quad is **not assumed to be rectangular**; it tilts, scales, and warps as the user moves their hands.
-- The visual filter is calculated and rendered **strictly inside** this polygon.
-- Everything outside the polygon remains raw camera background.
+### 4.3 Strict Exclusion of Face & Identity Filters
+HandFrame is **NOT a face-filter or identity modification application**. Filters are atmospheric, photographic, color grading, and artistic visual effects applied exclusively to the region bounded by the four fingertips.
 
-### 3.3 Polygon Geometry Validation
-A quad region is valid for filtering if:
-1. **Convexity**: Adjacent edge cross-products share identical signs (non-self-intersecting).
-2. **Minimum Surface Area**: Surface area calculated via Shoelace formula exceeds threshold ($\ge 1200\text{ px}^2$ on 720p).
-3. **Interior Angles**: Angles remain between $20^\circ$ and $160^\circ$.
+The specification explicitly forbids:
+* ❌ Face transformations, face morphing, or facial warping
+* ❌ Dog ears, cat noses, or animal overlays
+* ❌ Facial replacement or digital makeup
+* ❌ Eye enlargement or hair color modification
+* ❌ AR face masks or identity-altering filters
+* ❌ Body shape modification
 
 ---
 
-## 4. GESTURE DETECTION STATE MACHINE (PRESERVED)
+## 5. FILTER CHANGE GESTURE SYSTEM
 
-### 4.1 Touch-Pinch Distance Metric
-When all four tracked fingertips converge into a tight cluster (a "four-point pinch"), the system triggers a filter switch.
+### 5.1 Proximity Pinch Gesture
+When all four tracked fingertips come sufficiently close together into a single cluster (a "four-point pinch"), HandFrame advances to the next enabled filter in the active cycle.
 
-The proximity metric evaluates the normalized maximum pairwise distance between all 6 point pairs:
+### 5.2 Device-Independent Proximity Metric
+The proximity metric calculates the maximum normalized pairwise distance across all six fingertip pairs:
+
 $$d_{\text{norm}} = \frac{\max_{i < j} \|P_i - P_j\|}{\sqrt{W_{\text{frame}}^2 + H_{\text{frame}}^2}}$$
 
-- **Trigger Threshold ($T_{\text{trigger}}$)**: $d_{\text{norm}} < 0.045$ (fingertips touching).
-- **Release Threshold ($T_{\text{release}}$)**: $d_{\text{norm}} > 0.080$ (fingertips separated).
+* **Trigger Threshold ($T_{\text{trigger}}$):** $d_{\text{norm}} < 0.045$ (fingertips touching).
+* **Release Threshold ($T_{\text{release}}$):** $d_{\text{norm}} > 0.080$ (fingertips separated).
 
-### 4.2 State Machine Lifecycle
-To prevent filter cycling while fingers remain together, the system enforces a debounced state machine:
+Normalizing by the frame diagonal length ($\sqrt{W^2 + H^2}$) ensures consistent gesture sensitivity across desktop webcams, mobile portrait screens, and high-resolution video streams regardless of screen resolution.
 
-```
-  +-------------------------------------------------------------------+
-  |                             READY                                 |
-  +---------------------------------+---------------------------------+
-                                    |
-                                    | d_norm < T_trigger (for 3 frames)
-                                    v
-  +-------------------------------------------------------------------+
-  |                           TRIGGERED                               |
-  |  - Advance filter index (next_filter)                             |
-  |  - Display subtle toast notification                              |
-  +---------------------------------+---------------------------------+
-                                    |
-                                    v
-  +-------------------------------------------------------------------+
-  |                      WAIT_FOR_SEPARATION                          |
-  |  - Filter switching LOCKED OUT                                    |
-  +---------------------------------+---------------------------------+
-                                    |
-                                    | d_norm > T_release
-                                    v
-  +-------------------------------------------------------------------+
-  |                             READY                                 |
-  +-------------------------------------------------------------------+
+### 5.3 Gesture State Machine
+To ensure the gesture triggers **exactly once** per pinch and does not continuously cycle while fingers remain together, the engine enforces a debounced state machine:
+
+```text
+  READY
+    │
+    │ d_norm < T_trigger (held 3 consecutive frames)
+    ▼
+  TRIGGERED
+    │  - Advance to next enabled filter
+    │  - Show brief filter name toast
+    ▼
+  WAIT_FOR_SEPARATION
+    │  - Lock gesture trigger until fingers separate
+    │
+    │ d_norm > T_release
+    ▼
+  READY
 ```
 
 ---
 
-## 5. FIRST-CLASS MODULAR FILTER SYSTEM ARCHITECTURE
+## 6. UNIVERSAL FILTER SYSTEM & BUILT-IN PRESETS
 
-### 5.1 Universal Filter Interface
-Filters are first-class, independent modules. Core processing **NEVER** uses hardcoded branching (`if (filterId === 'moody')`).
+### 6.1 Extensible Filter Suite
+Filters are independent visual processing modules registered in the system. The built-in filter suite includes a broad set of visual styles:
+
+* **Original:** Clean, unfiltered camera pass-through baseline.
+* **Moody:** High contrast, desaturated shadows, deep atmospheric tones.
+* **Warm:** Golden hour tint with boosted warm tones and soft highlights.
+* **Cool:** Crisp cyan/blue cast with elevated shadow clarity.
+* **Vintage Film:** Lifted blacks, muted contrast, and vintage warm color shifts.
+* **Film Grain:** Analog film grain simulation with dynamic monochrome texture.
+* **Dreamy Blur:** Soft bloom diffusion with highlight glow.
+* **Cinematic:** Classic teal-and-orange color grade with high dynamic range look.
+* **Y2K / Digicam:** Early 2000s compact digital camera aesthetic with high sharpness and flash highlights.
+* **VHS:** Retro analog tape simulation with scanlines and chromatic aberration.
+* **Pixelated:** Retro 8-bit / 16-bit block quantization.
+* **Negative:** Color inversion with high contrast edges.
+* **Grayscale:** Classic monochrome black-and-white conversion.
+* **Sepia:** Warm antique brown monochrome tone.
+* **Retro Flash:** High-exposure vintage camera flash aesthetic.
+
+These filters serve as standard built-in presets defined by the application's central filter registry.
+
+---
+
+## 7. FILTER ARCHITECTURE & EXTENSIBILITY
+
+### 7.1 Decoupled Module Design
+The core HandFrame engine must **NOT** contain filter-specific conditionals such as `if (filter === "moody")` or hardcoded branching. The filter system is completely decoupled from camera handling, hand tracking, gesture detection, geometry calculations, and UI components.
+
+> **"Adding or removing a filter must not require modification of the camera, tracking, gesture, or HandFrame core logic."**
+
+### 7.2 Conceptual Code Structure
+```text
+filters/
+├── types/
+│   └── FilterTypes.ts            # Common filter interfaces & type definitions
+├── registry/
+│   └── FilterRegistry.ts         # Central filter registry & active cycle manager
+├── implementations/
+│   ├── OriginalFilter.ts
+│   ├── MoodyFilter.ts
+│   ├── WarmFilter.ts
+│   ├── VintageFilmFilter.ts
+│   ├── VhsFilter.ts
+│   ├── PixelateFilter.ts
+│   └── ... (individual built-in filter modules)
+└── presets/
+    └── DefaultFilters.ts         # Central manifest of built-in filters
+```
+
+### 7.3 Standard Filter Interface
+Every filter module exposes a unified interface:
 
 ```typescript
-// src/filters/types/FilterTypes.ts
-export type FilterCategory = 'Basic' | 'Cinematic' | 'Film' | 'Retro' | 'Dreamy' | 'Creative' | 'Color';
-
-export interface FilterMetadata {
-  id: string;
-  name: string;
-  description: string;
-  category: FilterCategory;
-  version: string;
-  parameters?: Record<string, number | string | boolean>;
-}
-
-export interface BaseFilter extends FilterMetadata {
+export interface BaseFilter {
+  readonly id: string;                  // Unique string identifier (e.g., 'vintage_film')
+  readonly displayName: string;         // Human-readable display name (e.g., 'Vintage Film')
+  readonly description?: string;       // Optional brief effect description
+  readonly category?: string;          // Optional category grouping
+  
   /**
-   * Applies the visual filter to a cropped sub-region image.
-   * @param imageData HTML5 Canvas ImageData object of the cropped bounding box.
+   * Applies the visual filter to a cropped ImageData sub-region.
+   * @param imageData HTML5 Canvas ImageData containing the quadrilateral bounding box.
    * @returns Processed ImageData object of identical dimensions.
    */
   apply(imageData: ImageData): ImageData;
 }
 ```
 
-### 5.2 Decoupled Module Architecture
-```text
-src/filters/
-├── types/
-│   └── FilterTypes.ts            # Common TypeScript interfaces
-├── registry/
-│   └── FilterRegistry.ts         # Central filter manager & active ordering
-├── presets/
-│   └── DefaultFilters.ts         # Filter manifest loader
-└── implementations/
-    ├── OriginalFilter.ts         # 1. Original (Baseline)
-    ├── MoodyFilter.ts            # 2. Moody Cinematic
-    ├── WarmFilter.ts             # 3. Warm Tone
-    ├── CoolFilter.ts             # 4. Cool Tone
-    ├── VintageFilmFilter.ts     # 5. Vintage Film
-    ├── FilmGrainFilter.ts       # 6. Film Grain
-    ├── DreamyBlurFilter.ts      # 7. Dreamy Blur
-    ├── CinematicFilter.ts        # 8. Teal & Orange Cinematic
-    ├── Y2kDigicamFilter.ts      # 9. Y2K Digicam
-    ├── VhsFilter.ts              # 10. VHS Retro Tape
-    ├── PixelateFilter.ts         # 11. Pixelated 8-Bit
-    ├── NegativeFilter.ts         # 12. Negative Invert
-    ├── GrayscaleFilter.ts        # 13. Grayscale
-    ├── SepiaFilter.ts            # 14. Sepia
-    └── RetroFlashFilter.ts      # 15. Retro Flash
-```
-
-### 5.3 Filter Scope & Strict Exclusions
-- **In Scope**: Color grading, contrast, saturation, film grain, vintage tones, scanlines, blur diffusion, pixelation, color offsets.
-- **Strictly Out of Scope**: Face morphing, dog ears, cat noses, eye enlargement, makeup overlays, facial accessories, AR identity modifications.
-
 ---
 
-## 6. EDIT FILTERS EXPERIENCE & LOCAL STORAGE PERSISTENCE
+## 8. UNLISTED TEMPORARY LOCAL FILTER MANAGEMENT ROUTE
 
-### 6.1 Dedicated Edit Filters Experience
-HandFrame provides a distinct **Edit Filters** management view separate from the camera:
+### 8.1 Concept & Purpose
+HandFrame features a built-in set of predefined filters. While standard users experience the default filter suite, a dedicated **unlisted, temporary filter management route** allows users to temporarily add, remove, or reorder built-in filters for their local browser session.
 
-- **Enable / Disable Toggles**: Checkboxes to select which filters participate in gesture rotation. Disabled filters are skipped during camera usage.
-- **Deterministic Reordering**:
-  - **Desktop**: Drag-and-drop handles (`≡`) to reorder the rotation sequence.
-  - **Mobile**: Touch-friendly Move Up (`▲`) and Move Down (`▼`) buttons.
-- **Live Preview Canvas**: Renders selected filters in real-time onto a sample preview image using the exact filter implementation.
-- **Reset to Default**: One-tap button restoring default enabled filter list and sequence.
-
-### 6.2 Browser LocalStorage Schema
-User filter choices and ordering persist automatically across browser reloads:
-
-```json
-// LocalStorage Key: "handframe_filter_config_v1"
-{
-  "version": "1.0.0",
-  "enabledFilterIds": [
-    "original",
-    "moody",
-    "warm",
-    "vintage_film",
-    "vhs",
-    "dreamy_blur",
-    "y2k_digicam",
-    "pixelate"
-  ]
-}
-```
-
----
-
-## 7. COMPOSITING PIPELINE & PERFORMANCE OPTIMIZATION
-
-### 7.1 Region-Only Bounding Box Crop Pipeline
-To maintain 30–60 FPS on desktop and mobile browsers, filters process **only the cropped sub-image bounding box**:
+### 8.2 Unlisted Route Specification (`/aesthetic14`)
+* **Default Route Path:** `/aesthetic14`
+* **Environment Variable Override:** The route path must be configurable via an environment variable (e.g. `VITE_FILTER_EDITOR_PATH`), defaulting to `/aesthetic14`.
+* **Zero UI Exposure / Non-Advertised Route:** This route must **NOT** be displayed, linked, or advertised anywhere in the standard frontend UI. It must not appear in:
+  - Navigation bars or headers
+  - Landing page buttons or text
+  - Floating camera overlay controls
+  - Footers, settings menus, or help dialogs
+  - Visible links, buttons, or normal UI copy
+* **Direct Address Bar Entry Only:** The page is accessed exclusively when a user manually enters the specific URL path into their browser address bar.
+* **UX Discoverability Requirement:** Hiding the route is a discoverability/UX choice to keep the main experience minimal. It does not imply security authentication or backend access control.
 
 ```text
-1. Compute axis-aligned bounding box [xMin, yMin, xMax, yMax] around quad points.
-2. Crop sub-region from raw video canvas context (getImageData).
-3. Execute active_filter.apply(croppedImageData).
-4. Create polygon path on 2D context using quad points.
-5. Clip context & draw processed sub-region inside quad path.
-6. Composite seamlessly over original unedited camera canvas.
+Normal Frontend (Landing / Camera)  ─── [No links to editor]
+                                          
+Direct URL Input (/aesthetic14)   ───▶ Unlisted Filter Editor Page
 ```
 
-### 7.2 Browser Memory & Latency Optimizations
-- **Zero React In-Loop Re-renders**: The real-time camera processing loop executes strictly inside `requestAnimationFrame()` using direct HTML Canvas refs. React state is **never** updated on per-frame loops.
-- **Buffer Reuse**: Pre-allocate offscreen canvas buffers and `ImageData` arrays to avoid garbage collection pauses.
-- **No Per-Pixel JS Loops Where Native Canvas/WebGL Applies**: Utilize `ctx.filter`, canvas blending modes, and typed array operations (`Uint8ClampedArray`) for maximum execution speed.
+### 8.3 In-Memory & Reload Reset Behavior
+* **Strictly Local Session State:** Modifications made on the special filter editor page apply **only to the current browser/device session**.
+* **Zero Persistent Storage:** Temporary filter configurations MUST NOT be persisted in `localStorage`, `IndexedDB`, cookies, or remote databases.
+* **Reload Resets to Default:** When the user reloads or refreshes the browser page:
+  ```text
+  Temporary filter modifications
+               │
+               ▼
+           DISCARDED
+               │
+               ▼
+  Default built-in registry configuration restored
+  ```
+  - Added filters disappear from the temporary cycle.
+  - Removed filters return to the available cycle.
+  - Temporary reordering changes are discarded.
+  - Built-in default configuration is completely restored upon refresh.
+
+### 8.4 Filter Editor Functionality
+The unlisted page interacts directly with the application's central `FilterRegistry`:
+
+1. **Select from Built-in Filters Only:** Users choose strictly from filters already implemented in the application. Users cannot write custom code or upload external filters.
+2. **Temporary Add / Remove:** Users can enable or disable registered built-in filters for their current session.
+3. **Temporary Reordering:** Users can adjust the rotation order (desktop drag-and-drop handles `≡` or mobile touch arrows `▲` `▼`).
+4. **Live Filter Previews:** Displays real-time visual previews executing `filter.apply(...)` on sample image data.
+
+```text
+HAND FRAME
+
+Filter Management (Temporary Session)
+
+≡  ✓  Original
+≡  ✓  Moody
+≡  ✓  Warm
+≡  ✕  VHS
+≡  ✓  Vintage Film
+≡  ✓  Cinematic
+
+        Reset to Default
+```
 
 ---
 
-## 8. NAVIGATION, LANDING PAGE & CAMERA CONTROLS
+## 9. FULLSCREEN CAMERA & VIEWPORT MANAGEMENT
 
-### 8.1 Minimal Landing Page
-The application opens to a minimal, elegant landing view:
-- **Title & Concept**: Clean typography introducing HandFrame.
-- **Primary Actions**:
-  - **`[ START CAMERA ]`**: Launches WebRTC camera stream and enters fullscreen viewfinder.
-  - **`[ EDIT FILTERS ]`**: Opens the filter management screen.
+### 9.1 Camera Viewport Dominance
+The camera is the primary hero experience. When active, the camera view fills the available screen space without page scrolling or window framing.
 
-### 8.2 Floating Camera Controls
-In camera mode, floating minimal controls overlay the video feed:
-- **Top-Left**: Back to Menu (`←`)
-- **Top-Right**: Front/Rear Camera Toggle (on supported mobile devices) & Debug Overlay Toggle (`D`)
-- **Bottom-Center**: Current Active Filter Pill (clickable to manually advance filter)
+### 9.2 Viewport Filling vs. Browser Fullscreen API
+The specification explicitly distinguishes between two fullscreen levels:
 
----
+1. **Viewport Filling Camera (`100dvh`):** The camera canvas occupies 100% of the browser's visible viewport (`100vw` × `100dvh`).
+2. **Browser Fullscreen API Mode:** An explicit, accessible **`Fullscreen`** toggle control that invokes `element.requestFullscreen()` (where supported by the browser) to hide browser chrome entirely.
 
-## 9. ERROR HANDLING, PERMISSIONS & CAMERA SWITCHING
+The Fullscreen control is floating, minimal, and aesthetically integrated into the camera UI overlay.
 
-### 9.1 Camera Access & WebRTC Permission States
-- **Permission Prompt**: Clear UI explaining camera usage prior to browser permission prompt.
-- **Permission Denied**: Friendly UI state with instructions on enabling camera access in browser settings.
-- **No Camera Found**: Clear notification when no video input devices are detected.
-- **Unsupported Browser**: Fallback notice for browsers lacking WebRTC / MediaPipe WASM support.
+### 9.3 Desktop Camera Experience
+* Camera fills the entire browser window viewport (`100vw` × `100dvh`).
+* Floating controls overlay the camera without occupying fixed layout blocks.
+* No scrollbars (`overflow: hidden`).
+* Camera is not placed inside a small centered card container.
 
-### 9.2 Front / Rear Camera Switching
-For mobile devices supporting multiple cameras:
-- Toggling calls `MediaStreamTrack.stop()` on existing tracks.
-- Re-requests `getUserMedia()` with updated `facingMode: "user" | "environment"`.
-- Automatically recalculates aspect ratio, video dimensions, and coordinate mirror matrices.
+```text
+┌──────────────────────────────────────┐
+│                                      │
+│                                      │
+│          FULLSCREEN CAMERA           │
+│                                      │
+│       HandFrame interaction          │
+│                                      │
+│                              controls│
+└──────────────────────────────────────┘
+```
 
----
-
-## 10. DEVELOPMENT DEBUG OVERLAY MODE
-
-Pressing 'D' (or tapping Debug in controls) toggles a dev overlay displaying:
-- 4 tracked landmark points (colored circles)
-- Quadrilateral bounding outline & centroid
-- Real-time FPS counter & frame processing latency (ms)
-- Camera stream native resolution vs canvas display resolution
-- Current gesture state machine status (`READY` / `TRIGGERED` / `WAIT_FOR_SEPARATION`)
+### 9.4 Mobile Camera Experience
+* Fullscreen portrait-first experience with smooth adaptation to landscape rotation.
+* Uses modern dynamic viewport height units (`100dvh`) to prevent layout shifts when mobile address bars collapse.
+* Honors mobile safe-area insets (`env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`).
+* Prevents accidental touch scrolling, elastic bounce, or gesture navigation interference.
+* Touch-friendly floating control targets ($\ge 44 \times 44\text{ px}$).
 
 ---
 
-## 11. MCP SERVER USAGE GUIDELINES
+## 10. COORDINATE MAPPING SYSTEM
 
-Implementation agents may utilize available MCP servers for:
-- Researching modern web design trends and minimal UI patterns.
-- Validating browser responsive layouts and mobile viewport behavior (`100dvh`).
-- Testing accessibility, touch targets, and safe-area compatibility.
+The engine must maintain exact spatial alignment between physical fingertips and generated filter vertices across the entire rendering pipeline:
 
-MCP usage must **not** introduce third-party cloud runtime dependencies or compromise offline-first client-side execution.
+```text
+Camera Stream (Native Resolution: W_cam × H_cam)
+                        ↓
+  Displayed HTML5 <video> / Viewport Canvas (W_view × H_view)
+                        ↓
+  Render Canvas Coordinates (W_canvas × H_canvas)
+                        ↓
+  MediaPipe Normalized Hand Landmarks (x_norm, y_norm ∈ [0.0, 1.0])
+                        ↓
+  HandFrame Quadrilateral Pixel Coordinates (P1, P2, P3, P4)
+```
+
+### Transformation Requirements:
+* **Desktop Webcams:** Standard landscape aspect mapping.
+* **Mobile Front Cameras:** Horizontal mirroring (`scaleX(-1)`) correctly mapped to canvas space.
+* **Mobile Rear Cameras:** Direct non-mirrored spatial mapping.
+* **Orientation Changes:** Dynamic re-calculation when mobile devices rotate between portrait and landscape.
+* **Display Scaling:** Correct scaling across `object-fit: cover` and `object-fit: contain` modes without spatial drift between visible fingertips and quadrilateral boundaries.
 
 ---
 
-## 12. MANDATORY NON-IMPLEMENTATION INSTRUCTION
+## 11. MOBILE CAMERA SWITCHING
 
-> **CRITICAL MANDATE: THIS TASK IS STRICTLY AN UPDATE TO THE TECHNICAL SPECIFICATION FILE (`HANDFRAME_SPECIFICATION.md`). DO NOT IMPLEMENT CODE, DO NOT CREATE COMPONENTS, DO NOT INSTALL DEPENDENCIES, DO NOT MODIFY SOURCE CODE, AND DO NOT RUN THE APPLICATION.**
+On mobile devices with multiple cameras, users can switch between front (selfie) and rear (environment) cameras.
+
+### Switching Sequence:
+1. Stop active tracks on current video stream (`track.stop()`).
+2. Re-call `navigator.mediaDevices.getUserMedia()` with requested `facingMode` (`"user"` or `"environment"`).
+3. Update stream dimensions and aspect ratio metrics.
+4. Recalculate horizontal mirroring and coordinate matrices.
+5. Maintain valid hand tracking and active filter state uninterrupted.
+
+---
+
+## 12. UI / VISUAL DESIGN DIRECTION
+
+### 12.1 Target Aesthetic
+> **Extremely simple, premium, modern, artistic, minimal, and unobtrusive.**
+
+The camera is the product; the UI supports the camera rather than competing with it. While the camera is active, the interface feels almost invisible.
+
+> **"Simple does not mean unfinished. Every visible UI element should feel intentional."**
+
+### 12.2 Design Guidelines
+* **Typography:** Crisp, high-end sans-serif typography (e.g., Inter, Outfit, or system sans-serif) with spacious tracking.
+* **Translucency & Blur:** Subtle floating panels with dark translucent backgrounds and soft backdrop blur (`backdrop-blur-md bg-black/40`).
+* **Restrained Controls:** Minimal floating icons that auto-hide or dim after 3 seconds of inactivity.
+* **Subtle Toast Feedback:** When the filter changes, the active filter name appears briefly at top-center (e.g., `MOODY`) and smoothly fades out over 1.2 seconds.
+* **Design Research Assistance:** Implementation agents may use available MCP servers (such as StitchMCP) to research UI patterns, evaluate minimal camera layouts, and test responsive/accessibility behavior.
+
+### 12.3 Strict UI Exclusions
+Avoid:
+* ❌ Dashboard layouts or multi-card grids
+* ❌ Heavy SaaS borders, aggressive drop shadows, or bright gradients
+* ❌ Large permanent toolbars or fixed navigation bars over the camera
+* ❌ Cluttered icon banks or dense instruction banners
+* ❌ Generic SaaS styling
+
+---
+
+## 13. WEBSITE STRUCTURE & NAVIGATION
+
+The primary public application uses a simple, streamlined structure:
+
+```text
+Landing Page
+   │
+   └── Start HandFrame (Fullscreen Camera Experience)
+```
+
+*(Note: The filter management route `/aesthetic14` is unlisted and not linked anywhere in the navigation tree).*
+
+### 13.1 Landing Page
+A clean, elegant introduction communicating the core concept:
+
+```text
+HAND FRAME
+
+Create the frame.
+Change what happens inside it.
+
+[ Start HandFrame ]
+```
+
+### 13.2 Floating Camera Controls
+When the camera is active, minimal floating controls float over the video feed:
+* **Top-Left:** Return to Landing Page (`←`).
+* **Top-Right:** Fullscreen Toggle (`⛶`), Mobile Camera Switch (where supported), Debug Mode Toggle (`D`).
+* **Bottom-Center:** Active Filter Indicator Pill (clickable to manually advance filter).
+
+---
+
+## 14. PERFORMANCE & COMPOSITING OPTIMIZATION
+
+### 14.1 Frame Rate Targets
+* **Minimum Target:** 30 FPS on standard mobile and desktop devices.
+* **Optimal Target:** 60 FPS on performance hardware.
+
+### 14.2 React Render Loop Isolation
+* The frame processing pipeline runs strictly inside `requestAnimationFrame()`.
+* React state updates are **NEVER** called inside the per-frame animation loop.
+* Canvas rendering utilizes direct DOM element references (`useRef`).
+
+### 14.3 Region-Only Compositing
+Filters process **only the bounding area inside the HandFrame quadrilateral**, avoiding unnecessary full-frame re-processing:
+
+1. Calculate axis-aligned bounding box around $P_1, P_2, P_3, P_4$.
+2. Crop sub-region `ImageData`.
+3. Apply active filter module to sub-region.
+4. Clip context using polygon path formed by $P_1, P_2, P_3, P_4$.
+5. Composite filtered sub-region over raw camera feed canvas.
+
+---
+
+## 15. ERROR STATES & ACCESSIBILITY
+
+### 15.1 Graceful Failure Handling
+Presents simple, human-readable UI messaging without raw technical stack traces for:
+* Camera permission denied
+* No camera hardware detected
+* Camera locked by another application
+* Unsupported browser (lacking WebRTC / WASM support)
+* MediaPipe landmarker initialization failure
+* Camera switching failure
+* Low device performance detection
+
+### 15.2 Web Accessibility
+* Accessible ARIA labels on all control buttons.
+* Desktop keyboard navigation (`Space` for manual filter switch, `F` for Fullscreen, `D` for Debug, `Esc` for Menu).
+* Visible focus indicators.
+* High contrast ratio for text elements.
+* Touch-friendly target sizes ($\ge 44 \times 44\text{ px}$).
+
+---
+
+## 16. DEVELOPMENT DEBUG OVERLAY MODE
+
+A dev-only overlay (toggled via `D` key or debug icon, hidden in production by default) showing:
+* 4 tracked fingertip landmarks ($P_1$: green, $P_2$: blue, $P_3$: yellow, $P_4$: red)
+* Quadrilateral bounding outline & centroid
+* Real-time FPS counter & processing latency (ms)
+* Stream resolution vs canvas resolution
+* Active gesture state (`READY`, `TRIGGERED`, `WAIT_FOR_SEPARATION`)
+
+---
+
+## 17. CONCEPTUAL ARCHITECTURE PIPELINE
+
+The future implementation architecture separates UI components from real-time processing:
+
+```text
+Camera Stream (WebRTC)
+   │
+   ▼
+Hand Tracking (MediaPipe WASM Worker)
+   │
+   ▼
+Four Fingertip Coordinates (P1, P2, P3, P4)
+   │
+   ▼
+Geometry / Quadrilateral Validation
+   │
+   ▼
+Gesture Controller (State Machine)
+   │
+   ▼
+Filter Manager (Temporary Session State / Registry Defaults)
+   │
+   ▼
+Region Filter Processing (Canvas / WebGL)
+   │
+   ▼
+Fullscreen Camera Experience (Viewport Canvas)
+```
+
+---
+
+## 18. NO OVER-ENGINEERING & NON-GOALS
+
+The future implementation must remain clean and lightweight:
+* ❌ NO Redux or complex global state libraries unless genuinely needed (React Context / lightweight state is sufficient).
+* ❌ NO Backend services, databases, or microservices.
+* ❌ NO User accounts, authentication, or cloud sync.
+* ❌ NO Over-engineered plugin frameworks beyond the Filter Registry interface.
+
+---
+
+## 19. MCP SERVER USAGE GUIDELINES
+
+Implementation agents may use available MCP servers (such as StitchMCP) during future development for:
+* Researching minimal web UI designs and visual inspiration.
+* Responsive viewport testing and mobile layout validation.
+* Accessibility testing and performance profiling.
+
+MCP tools must not introduce external runtime dependencies into the client application. HandFrame remains **lightweight + local-first + browser-based**.
+
+---
+
+## 20. ACCEPTANCE CRITERIA
+
+### 20.1 Normal User Workflow
+1. User visits the primary HandFrame URL.
+2. Experiences the minimal landing page and fullscreen camera view.
+3. No links, buttons, or mentions of the filter editor are visible anywhere in the UI.
+4. HandFrame cycles through the standard built-in filter suite using the 4-finger pinch gesture.
+
+### 20.2 Special Route User Workflow (`/aesthetic14`)
+1. User manually navigates to `/aesthetic14` (or configured env path).
+2. The unlisted filter management page renders with built-in filter toggles and reordering handles.
+3. User temporarily adds, removes, or reorders built-in filters.
+4. The temporary filter list immediately updates the local session gesture cycle.
+5. Other users and devices remain completely unaffected.
+6. Refreshing or reloading the page **discards** temporary modifications and restores the default built-in filter configuration.
+
+---
+
+## 21. ABSOLUTE NON-IMPLEMENTATION DIRECTIVE
+
+> **CRITICAL MANDATE: THIS TASK IS STRICTLY AN UPDATE TO THE TECHNICAL SPECIFICATION FILE (`HANDFRAME_SPECIFICATION.md`). DO NOT IMPLEMENT CODE, DO NOT CREATE COMPONENTS, DO NOT WRITE STYLES, DO NOT INSTALL DEPENDENCIES, DO NOT INITIALIZE PROJECTS, AND DO NOT RUN DEVELOPMENT SERVERS.**
+
+---
+
+## 22. SINGLE SOURCE OF TRUTH SUMMARY
+
+This document represents the **single source of truth** for HandFrame as a web application. All future web implementation work must strictly conform to the platform, UI, performance, gesture, filter architecture, coordinate mapping, unlisted filter editor route, and compositing specifications defined herein.
