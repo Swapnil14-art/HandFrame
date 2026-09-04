@@ -1,6 +1,6 @@
 import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import basicSsl from '@vitejs/plugin-basic-ssl';
+import mkcert from 'vite-plugin-mkcert';
 import os from 'os';
 
 function handframeLanBannerPlugin(): Plugin {
@@ -34,7 +34,7 @@ function handframeLanBannerPlugin(): Plugin {
         const primaryLan = physicalLanIps[0]?.ip || '10.x.x.x';
 
         console.log('\n===================================================================');
-        console.log('                 HANDFRAME LAN DEV SERVER RUNNING                  ');
+        console.log('                 HANDFRAME TRUSTED LAN HTTPS DEV SERVER            ');
         console.log('===================================================================');
         console.log(`\n  ➜ Local Laptop: https://localhost:${port}/`);
         console.log(`  ➜ Mobile LAN:   https://${primaryLan}:${port}/`);
@@ -50,8 +50,8 @@ function handframeLanBannerPlugin(): Plugin {
         console.log('  MOBILE CONNECTIVITY INSTRUCTIONS (PHONE):');
         console.log('  1. Connect phone to the SAME Wi-Fi network as this laptop.');
         console.log(`  2. Open https://${primaryLan}:${port}/ on Safari (iOS) or Chrome (Android).`);
-        console.log('  3. If browser shows SSL warning: Tap "Advanced" -> "Proceed to site".');
-        console.log('  4. Tap "Start HandFrame" to grant camera access.');
+        console.log('  3. Direct navigation to /camera and /aesthetic14 works over HTTPS.');
+        console.log('  4. Tap "Start HandFrame" to grant camera access in a secure context.');
         console.log('===================================================================\n');
       });
     },
@@ -62,7 +62,7 @@ function handframeLanBannerPlugin(): Plugin {
 export default defineConfig({
   plugins: [
     react(),
-    basicSsl(),
+    mkcert(),
     handframeLanBannerPlugin(),
   ],
   server: {

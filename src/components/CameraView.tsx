@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CameraManager, CameraError } from '../camera/CameraManager';
 import { CoordinateTransformer } from '../camera/CoordinateTransformer';
-import { HandTracker } from '../tracking/HandTracker';
+import { HandTracker, HandFramePoints } from '../tracking/HandTracker';
 import { QuadGeometry, QuadPolygon } from '../geometry/QuadGeometry';
 import { GestureController } from '../gesture/GestureController';
 import { QuadCompositor } from '../compositing/QuadCompositor';
@@ -67,7 +67,9 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
   const animationFrameIdRef = useRef<number | null>(null);
   const lastQuadRef = useRef<QuadPolygon | null>(null);
 
-  // Performance metrics tracking
+  // Performance & inference frame caching refs
+  const lastVideoTimeRef = useRef<number>(-1);
+  const cachedLandmarksResultRef = useRef<HandFramePoints | null>(null);
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(performance.now());
   const currentFpsRef = useRef(0);
@@ -234,8 +236,13 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const isMirrored = cameraManagerRef.current.isMirrored();
 
-          // 1. Detect Hand Landmarks
-          const landmarksResult = tracker.detect(video, timestamp, isMirrored);
+          // 1. Optimized Hand Landmark Detection: Run MediaPipe inference ONLY when video frame advances
+          let landmarksResult = cachedLandmarksResultRef.current;
+          if (video.currentTime !== lastVideoTimeRef.current) {
+            lastVideoTimeRef.current = video.currentTime;
+            landmarksResult = tracker.detect(video, timestamp, isMirrored);
+            cachedLandmarksResultRef.current = landmarksResult;
+          }
 
           let quad: QuadPolygon | null = null;
           if (landmarksResult) {
@@ -249,6 +256,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
             };
 
             // Map MediaPipe normalized (0..1) coordinates to canvas pixels
+            // MANDATORY SEMANTIC ORDER: P1=LEFT_THUMB, P2=LEFT_INDEX, P3=RIGHT_INDEX, P4=RIGHT_THUMB
             const rawQuad: QuadPolygon = {
               P1: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P1, transformConfig),
               P2: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P2, transformConfig),
