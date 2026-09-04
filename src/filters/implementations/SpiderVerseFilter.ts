@@ -3,80 +3,119 @@ import { BaseFilter } from '../types/FilterTypes';
 export class SpiderVerseFilter implements BaseFilter {
   public id = 'spider_verse';
   public displayName = 'Spider-Verse';
-  public description = 'Comic-book visual style with chromatic separation, halftone dots, and bold ink outlines';
+  public description = 'Vibrant comic-animation style with controlled registration RGB split, thin ink outlines, and subtle micro honeycomb texture';
   public category = 'Artistic' as const;
-  public version = '1.0.0';
+  public version = '2.0.0';
 
   public apply(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // 1. Convert to luminance buffer for Sobel edge detection & halftone calculation
+    // 1. Compute grayscale luminance buffer & Sobel edge buffer
     const gray = new Float32Array(width * height);
+    const edges = new Float32Array(width * height);
+
     for (let i = 0; i < width * height; i++) {
       const idx = i * 4;
       gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
     }
 
-    const chromaticOffset = 5; // 5px RGB chromatic registration offset
+    // Sobel edge detection pass for clean, thin ink outlines & registration alignment
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = y * width + x;
+
+        const gx =
+          -gray[(y - 1) * width + (x - 1)] + gray[(y - 1) * width + (x + 1)] -
+          2 * gray[y * width + (x - 1)] + 2 * gray[y * width + (x + 1)] -
+          gray[(y + 1) * width + (x - 1)] + gray[(y + 1) * width + (x + 1)];
+
+        const gy =
+          -gray[(y - 1) * width + (x - 1)] - 2 * gray[(y - 1) * width + x] - gray[(y - 1) * width + (x + 1)] +
+          gray[(y + 1) * width + (x - 1)] + 2 * gray[(y + 1) * width + x] + gray[(y + 1) * width + (x + 1)];
+
+        edges[idx] = Math.sqrt(gx * gx + gy * gy);
+      }
+    }
+
+    const chromaticOffset = 2; // Restrained 2px registration offset around edges
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const outIdx = (y * width + x) * 4;
-
-        // Chromatic sampling (Red shifted right, Blue/Cyan shifted left)
-        const rx = Math.min(width - 1, Math.max(0, x + chromaticOffset));
-        const bx = Math.min(width - 1, Math.max(0, x - chromaticOffset));
-
-        const rIdx = (y * width + rx) * 4;
-        const bIdx = (y * width + bx) * 4;
-
-        let r = data[rIdx];
-        let g = data[outIdx + 1];
-        let b = data[bIdx + 2];
-
+        const edge = edges[y * width + x];
         const lum = gray[y * width + x];
 
-        // Comic-book 4x4 halftone dot screen pattern
-        const dotX = x % 4;
-        const dotY = y % 4;
-        const isDotCenter = (dotX === 1 || dotX === 2) && (dotY === 1 || dotY === 2);
-        if (isDotCenter && lum < 140) {
-          // Darken shadow dots for CMYK print texture
-          r = Math.round(r * 0.75);
-          g = Math.round(g * 0.75);
-          b = Math.round(b * 0.75);
+        // 2. Controlled Comic-Print Registration Misalignment (RGB split on/near edges only)
+        let origR = data[outIdx];
+        let origG = data[outIdx + 1];
+        let origB = data[outIdx + 2];
+
+        if (edge > 25) {
+          const rx = Math.min(width - 1, Math.max(0, x + chromaticOffset));
+          const bx = Math.min(width - 1, Math.max(0, x - chromaticOffset));
+          const rIdx = (y * width + rx) * 4;
+          const bIdx = (y * width + bx) * 4;
+
+          origR = data[rIdx];
+          origB = data[bIdx + 2];
         }
 
-        // Posterize colors to 5 vibrant comic book levels
-        r = Math.floor(r / 51) * 51;
-        g = Math.floor(g / 51) * 51;
-        b = Math.floor(b / 51) * 51;
+        // 3. Vibrant Spider-Verse Color Grading & Saturation Boost
+        // Saturation amplification (1.45x)
+        let rSat = lum + 1.45 * (origR - lum);
+        let gSat = lum + 1.35 * (origG - lum);
+        let bSat = lum + 1.50 * (origB - lum);
 
-        // Sobel Ink Outline calculation
-        let edge = 0;
-        if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
-          const gx = -gray[(y - 1) * width + (x - 1)] + gray[(y - 1) * width + (x + 1)] -
-                     2 * gray[y * width + (x - 1)] + 2 * gray[y * width + (x + 1)] -
-                     gray[(y + 1) * width + (x - 1)] + gray[(y + 1) * width + (x + 1)];
-
-          const gy = -gray[(y - 1) * width + (x - 1)] - 2 * gray[(y - 1) * width + x] - gray[(y - 1) * width + (x + 1)] +
-                     gray[(y + 1) * width + (x - 1)] + 2 * gray[(y + 1) * width + x] + gray[(y + 1) * width + (x + 1)];
-
-          edge = Math.sqrt(gx * gx + gy * gy);
-        }
-
-        if (edge > 45) {
-          // Bold black ink line
-          outData[outIdx]     = 10;
-          outData[outIdx + 1] = 10;
-          outData[outIdx + 2] = 20;
+        // Spider-Verse signature palette tinting: Deep blues/purples in shadows, vivid crimson in midtones, cyan accents in highlights
+        if (lum < 100) {
+          // Deep Spider-Man suit blue/purple shadow depth
+          rSat = rSat * 0.90 + 12;
+          gSat = gSat * 0.85 + 5;
+          bSat = bSat * 1.10 + 25;
+        } else if (lum < 200) {
+          // Punchy comic midtone crimson & warm skin pop
+          rSat = rSat * 1.12 + 15;
+          gSat = gSat * 1.02;
+          bSat = bSat * 0.95;
         } else {
-          // Vibrant Spider-Verse comic tone
-          outData[outIdx]     = Math.min(255, r + 20);
-          outData[outIdx + 1] = Math.min(255, g + 10);
-          outData[outIdx + 2] = Math.min(255, b + 30);
+          // High-tech Spider-Verse electric cyan / white highlights
+          rSat = rSat * 1.05;
+          gSat = gSat * 1.08 + 10;
+          bSat = bSat * 1.12 + 15;
+        }
+
+        // Stylized 8-level comic color quantization (smooth 3D animation feel)
+        let r = Math.min(255, Math.max(0, Math.floor(rSat / 32) * 32 + 16));
+        let g = Math.min(255, Math.max(0, Math.floor(gSat / 32) * 32 + 16));
+        let b = Math.min(255, Math.max(0, Math.floor(bSat / 32) * 32 + 16));
+
+        // 4. Subtle Micro Honeycomb / Halftone Grid (3px cell size, 12% opacity blend)
+        const hx = x % 3;
+        const hy = y % 3;
+        const isHexGridBorder = (hx === 0 && hy === 0) || (hx === 1 && hy === 2);
+
+        if (isHexGridBorder && lum < 170) {
+          // Micro CMYK print texture
+          r = Math.round(r * 0.88);
+          g = Math.round(g * 0.88);
+          b = Math.round(b * 0.92 + 8);
+        }
+
+        // 5. Restrained, Clean Thin Ink Outlines (integrated naturally)
+        if (edge > 65) {
+          // Thin dark ink line integrated with underlying tone
+          outData[outIdx]     = Math.round(r * 0.20 + 10);
+          outData[outIdx + 1] = Math.round(g * 0.20 + 10);
+          outData[outIdx + 2] = Math.round(b * 0.25 + 20);
+          outData[outIdx + 3] = 255;
+        } else {
+          // Rich Spider-Verse comic tone
+          outData[outIdx]     = r;
+          outData[outIdx + 1] = g;
+          outData[outIdx + 2] = b;
+          outData[outIdx + 3] = 255;
         }
       }
     }
