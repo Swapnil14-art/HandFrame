@@ -190,13 +190,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               P4: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P4, transformConfig),
             };
 
-            // Process quad smoothly without halting on extreme 180° rotation
-            let validQuad = rawQuad;
-            if (!QuadGeometry.isValidConvexQuad(rawQuad)) {
-              validQuad = QuadGeometry.untangleConvexQuad(rawQuad);
-            }
-
-            quad = QuadGeometry.smoothQuad(validQuad, lastQuadRef.current);
+            quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current);
             lastQuadRef.current = quad;
           } else {
             lastQuadRef.current = null;

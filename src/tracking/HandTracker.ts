@@ -9,10 +9,10 @@ export type TrackingStatus =
   | 'TRACKING_DEGRADED';
 
 export interface HandFramePoints {
-  P1: Point2D; // Vertex 1 (Top-Left / Counter-clockwise)
-  P2: Point2D; // Vertex 2 (Top-Right)
-  P3: Point2D; // Vertex 3 (Bottom-Right)
-  P4: Point2D; // Vertex 4 (Bottom-Left)
+  P1: Point2D; // RIGHT_THUMB (Landmark 4 of Right Hand)
+  P2: Point2D; // RIGHT_INDEX (Landmark 8 of Right Hand)
+  P3: Point2D; // LEFT_INDEX  (Landmark 8 of Left Hand)
+  P4: Point2D; // LEFT_THUMB  (Landmark 4 of Left Hand)
   confidence: number;
   status: TrackingStatus;
   isGraceFrame?: boolean;
@@ -28,9 +28,6 @@ export class HandTracker {
   private graceFramesCount: number = 0;
   private readonly maxGraceFrames: number = 12; // ~350ms grace period at 30fps
 
-  /**
-   * Initializes MediaPipe HandLandmarker WASM instance.
-   */
   public async initialize(): Promise<void> {
     if (this.isReady || this.isInitializing) return;
     this.isInitializing = true;
@@ -90,8 +87,8 @@ export class HandTracker {
   }
 
   /**
-   * Detects hands in video frame and extracts 4 key fingertip landmarks.
-   * Completely orientation-agnostic (supports 180° rotation, upside-down hands, thumb-below-index).
+   * Detects 2 hands and extracts fingertips strictly in semantic identity order:
+   * [RIGHT_THUMB, RIGHT_INDEX, LEFT_INDEX, LEFT_THUMB]
    */
   public detect(
     videoElement: HTMLVideoElement,
@@ -107,7 +104,7 @@ export class HandTracker {
       const hasTwoHands = results && results.landmarks && results.landmarks.length >= 2;
 
       if (!hasTwoHands) {
-        // TEMPORAL GRACE PERIOD: Retain last valid points during temporary 1-frame tracking drops
+        // TEMPORAL GRACE PERIOD: Retain last valid points during temporary tracking drops
         if (this.lastValidPoints && this.graceFramesCount < this.maxGraceFrames) {
           this.graceFramesCount++;
           return {
@@ -123,51 +120,74 @@ export class HandTracker {
         return null;
       }
 
-      // 1. Extract raw 4 fingertips (MediaPipe Landmark 8 = Index Tip, Landmark 4 = Thumb Tip)
       const hand0 = results.landmarks[0];
       const hand1 = results.landmarks[1];
 
-      const candidatePoints: Point2D[] = [
-        { x: hand0[8].x, y: hand0[8].y }, // Hand 0 Index
-        { x: hand0[4].x, y: hand0[4].y }, // Hand 0 Thumb
-        { x: hand1[8].x, y: hand1[8].y }, // Hand 1 Index
-        { x: hand1[4].x, y: hand1[4].y }, // Hand 1 Thumb
-      ];
+      const h0Label = results.handednesses?.[0]?.[0]?.categoryName; // 'Right' or 'Left'
+      const h1Label = results.handednesses?.[1]?.[0]?.categoryName; // 'Right' or 'Left'
+
+      let rightHand = hand0;
+      let leftHand = hand1;
+
+      if (h0Label === 'Right' && h1Label === 'Left') {
+        rightHand = hand0;
+        leftHand = hand1;
+      } else if (h0Label === 'Left' && h1Label === 'Right') {
+        rightHand = hand1;
+        leftHand = hand0;
+      } else if (this.lastValidPoints) {
+        // Ambiguous handedness label from MediaPipe: match against previous frame Right vs Left
+        const prevRightCenter = {
+          x: (this.lastValidPoints.P1.x + this.lastValidPoints.P2.x) / 2,
+          y: (this.lastValidPoints.P1.y + this.lastValidPoints.P2.y) / 2,
+        };
+        const prevLeftCenter = {
+          x: (this.lastValidPoints.P3.x + this.lastValidPoints.P4.x) / 2,
+          y: (this.lastValidPoints.P3.y + this.lastValidPoints.P4.y) / 2,
+        };
+
+        const h0Center = { x: hand0[9].x, y: hand0[9].y };
+        const h1Center = { x: hand1[9].x, y: hand1[9].y };
+
+        const dist0ToRight = this.distSq(h0Center, prevRightCenter) + this.distSq(h1Center, prevLeftCenter);
+        const dist1ToRight = this.distSq(h1Center, prevRightCenter) + this.distSq(h0Center, prevLeftCenter);
+
+        if (dist1ToRight < dist0ToRight) {
+          rightHand = hand1;
+          leftHand = hand0;
+        } else {
+          rightHand = hand0;
+          leftHand = hand1;
+        }
+      } else {
+        // First frame fallback if MediaPipe labels are identical: sort by X coordinate
+        const h0x = hand0[9].x;
+        const h1x = hand1[9].x;
+        if (isMirrored ? h0x < h1x : h0x > h1x) {
+          rightHand = hand1;
+          leftHand = hand0;
+        } else {
+          rightHand = hand0;
+          leftHand = hand1;
+        }
+      }
 
       // Confidence computation
       const score0 = results.handednesses?.[0]?.[0]?.score || 0.85;
       const score1 = results.handednesses?.[1]?.[0]?.score || 0.85;
       const confidence = (score0 + score1) / 2;
 
-      let orderedPoints: [Point2D, Point2D, Point2D, Point2D];
-
-      // 2. Track points across time using Optimal Distance Bipartite Matching
-      if (this.lastValidPoints) {
-        const prevPts = [
-          this.lastValidPoints.P1,
-          this.lastValidPoints.P2,
-          this.lastValidPoints.P3,
-          this.lastValidPoints.P4,
-        ];
-        orderedPoints = this.matchCandidatesToPrevious(candidatePoints, prevPts);
-      } else {
-        // First frame: Order points around centroid in perimeter order
-        orderedPoints = this.orderPointsConvex(candidatePoints);
-      }
-
-      // 3. Outlier Rejection: Clamp unphysically large single-frame teleports (>0.35 norm units)
-      if (this.lastValidPoints) {
-        orderedPoints[0] = this.clampOutlier(orderedPoints[0], this.lastValidPoints.P1, 0.35);
-        orderedPoints[1] = this.clampOutlier(orderedPoints[1], this.lastValidPoints.P2, 0.35);
-        orderedPoints[2] = this.clampOutlier(orderedPoints[2], this.lastValidPoints.P3, 0.35);
-        orderedPoints[3] = this.clampOutlier(orderedPoints[3], this.lastValidPoints.P4, 0.35);
-      }
+      // Extract points strictly in semantic order: RIGHT_THUMB, RIGHT_INDEX, LEFT_INDEX, LEFT_THUMB
+      const rightThumb: Point2D = { x: rightHand[4].x, y: rightHand[4].y };
+      const rightIndex: Point2D = { x: rightHand[8].x, y: rightHand[8].y };
+      const leftIndex: Point2D  = { x: leftHand[8].x,  y: leftHand[8].y };
+      const leftThumb: Point2D  = { x: leftHand[4].x,  y: leftHand[4].y };
 
       const currentPoints: HandFramePoints = {
-        P1: orderedPoints[0],
-        P2: orderedPoints[1],
-        P3: orderedPoints[2],
-        P4: orderedPoints[3],
+        P1: rightThumb, // RIGHT_THUMB
+        P2: rightIndex, // RIGHT_INDEX
+        P3: leftIndex,  // LEFT_INDEX
+        P4: leftThumb,  // LEFT_THUMB
         confidence,
         status: 'TRACKING_STABLE',
         isGraceFrame: false,
@@ -191,87 +211,10 @@ export class HandTracker {
     }
   }
 
-  /**
-   * Optimal 1-to-1 bipartite matching between new candidate points and previous frame points.
-   * Prevents point-swapping when hands rotate 180°, cross, or flip orientation.
-   */
-  private matchCandidatesToPrevious(
-    candidates: Point2D[],
-    previous: Point2D[]
-  ): [Point2D, Point2D, Point2D, Point2D] {
-    // Generate all 24 permutations of 4 elements
-    const permutations = this.getPermutations([0, 1, 2, 3]);
-
-    let minTotalDistSq = Infinity;
-    let bestPermutation = permutations[0];
-
-    for (const perm of permutations) {
-      let totalDistSq = 0;
-      for (let i = 0; i < 4; i++) {
-        const cand = candidates[perm[i]];
-        const prev = previous[i];
-        const dx = cand.x - prev.x;
-        const dy = cand.y - prev.y;
-        totalDistSq += dx * dx + dy * dy;
-      }
-
-      if (totalDistSq < minTotalDistSq) {
-        minTotalDistSq = totalDistSq;
-        bestPermutation = perm;
-      }
-    }
-
-    return [
-      candidates[bestPermutation[0]],
-      candidates[bestPermutation[1]],
-      candidates[bestPermutation[2]],
-      candidates[bestPermutation[3]],
-    ];
-  }
-
-  /**
-   * Sorts 4 points by polar angle around their centroid to form a clean, non-self-intersecting perimeter loop.
-   */
-  private orderPointsConvex(points: Point2D[]): [Point2D, Point2D, Point2D, Point2D] {
-    const cx = (points[0].x + points[1].x + points[2].x + points[3].x) / 4;
-    const cy = (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
-
-    const sorted = [...points].sort((a, b) => {
-      const angleA = Math.atan2(a.y - cy, a.x - cx);
-      const angleB = Math.atan2(b.y - cy, b.x - cx);
-      return angleA - angleB;
-    });
-
-    return [sorted[0], sorted[1], sorted[2], sorted[3]];
-  }
-
-  private getPermutations(arr: number[]): number[][] {
-    if (arr.length <= 1) return [arr];
-    const result: number[][] = [];
-    for (let i = 0; i < arr.length; i++) {
-      const current = arr[i];
-      const remaining = arr.slice(0, i).concat(arr.slice(i + 1));
-      const remainingPerms = this.getPermutations(remaining);
-      for (const perm of remainingPerms) {
-        result.push([current, ...perm]);
-      }
-    }
-    return result;
-  }
-
-  private clampOutlier(candidate: Point2D, previous: Point2D, maxJumpNorm: number): Point2D {
-    const dx = candidate.x - previous.x;
-    const dy = candidate.y - previous.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist > maxJumpNorm) {
-      const scale = maxJumpNorm / dist;
-      return {
-        x: previous.x + dx * scale,
-        y: previous.y + dy * scale,
-      };
-    }
-    return candidate;
+  private distSq(a: Point2D, b: Point2D): number {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
   }
 
   public resetHistory(): void {
