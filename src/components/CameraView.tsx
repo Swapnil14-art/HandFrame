@@ -79,12 +79,14 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     const initEngine = async () => {
       try {
         if (!videoRef.current || !canvasRef.current) return;
+        setErrorMessage(null);
+        setIsLoading(true);
 
         // 1. Initialize Compositor
         compositorRef.current = new QuadCompositor();
 
-        // 2. Start Camera
-        setLoadingText('Requesting Camera Stream...');
+        // 2. Start Camera with mobile fallbacks & iOS Safari attributes
+        setLoadingText('Requesting Mobile Camera Stream...');
         await cameraManagerRef.current.startCamera(videoRef.current, 'user');
         if (!isMounted) return;
 
@@ -107,12 +109,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         console.error('HandFrame engine initialization error:', err);
         if (isMounted) {
           setIsLoading(false);
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            setErrorMessage('Camera access was denied. Please grant camera permission to use HandFrame.');
+          if (err?.message?.includes('SECURITY_CONTEXT_REQUIRED')) {
+            setErrorMessage(
+              'Camera access requires HTTPS or localhost on mobile browsers. Mobile Safari and Chrome block WebRTC camera access over HTTP IP addresses.'
+            );
+          } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            setErrorMessage('Camera access was denied. Please allow camera permissions in your mobile browser settings to use HandFrame.');
           } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
             setErrorMessage('No camera hardware was detected on your device.');
           } else {
-            setErrorMessage('Failed to initialize HandFrame local engine. Please ensure WebRTC and WASM are supported.');
+            setErrorMessage('Failed to initialize mobile camera. Please ensure camera permissions are granted and retry.');
           }
         }
       }
@@ -168,7 +174,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const isMirrored = cameraManagerRef.current.isMirrored();
 
-          // 1. Detect Hand Landmarks (with orientation-agnostic tracking & temporal grace period)
+          // 1. Detect Hand Landmarks
           const landmarksResult = tracker.detect(video, timestamp, isMirrored);
 
           let quad: QuadPolygon | null = null;
@@ -196,7 +202,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
             lastQuadRef.current = null;
           }
 
-          // 2. Process Gesture State Machine (Centroid Convergence Metric + Cooldown)
+          // 2. Process Gesture State Machine
           const gestureResult = gestureControllerRef.current.processFrame(
             landmarksResult
               ? {
@@ -285,13 +291,21 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
   return (
     <div className="relative w-screen h-dvh bg-black overflow-hidden select-none">
-      {/* Hidden WebRTC video element supplying stream to canvas */}
+      {/* Active WebRTC video element (rendered transparently for mobile video frame decoding) */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className="hidden"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
       />
 
       {/* Main Fullscreen Output Canvas */}
@@ -313,14 +327,22 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       {errorMessage && (
         <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 text-center">
           <AlertCircle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
-          <h2 className="text-white text-lg font-semibold mb-2">Camera Access Error</h2>
-          <p className="text-white/70 text-xs max-w-sm mb-6">{errorMessage}</p>
-          <button
-            onClick={onBackToLanding}
-            className="px-6 py-2.5 bg-white text-black text-xs font-semibold rounded-full hover:bg-white/90 transition-all"
-          >
-            Return to Landing
-          </button>
+          <h2 className="text-white text-lg font-semibold mb-2">Camera Access Issue</h2>
+          <p className="text-white/70 text-xs max-w-sm mb-6 leading-relaxed">{errorMessage}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2.5 bg-emerald-500 text-black text-xs font-semibold rounded-full hover:bg-emerald-400 transition-all"
+            >
+              Retry Camera
+            </button>
+            <button
+              onClick={onBackToLanding}
+              className="px-5 py-2.5 bg-white/10 text-white border border-white/20 text-xs font-semibold rounded-full hover:bg-white/20 transition-all"
+            >
+              Back to Landing
+            </button>
+          </div>
         </div>
       )}
 

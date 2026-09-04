@@ -12,6 +12,7 @@ export class CameraManager {
 
   /**
    * Initializes camera stream on target HTML5 video element.
+   * Implements progressive fallback constraints to ensure compatibility across mobile devices & desktop browsers.
    */
   public async startCamera(
     videoElement: HTMLVideoElement,
@@ -20,25 +21,69 @@ export class CameraManager {
     this.videoElement = videoElement;
     this.currentFacingMode = preferredFacingMode;
 
+    // Ensure required iOS Safari attributes are set on HTMLVideoElement
+    videoElement.setAttribute('playsinline', 'true');
+    videoElement.setAttribute('muted', 'true');
+    videoElement.setAttribute('autoplay', 'true');
+    videoElement.playsInline = true;
+    videoElement.muted = true;
+
     // Stop existing stream if active
     this.stopCamera();
 
-    const constraints: MediaStreamConstraints = {
-      audio: false,
-      video: {
-        facingMode: preferredFacingMode,
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 60, min: 30 },
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error(
+        'SECURITY_CONTEXT_REQUIRED: Camera access requires HTTPS or localhost. navigator.mediaDevices is unavailable in plain HTTP on mobile browsers.'
+      );
+    }
+
+    // Progressive Constraint Levels to prevent OverconstrainedError on Mobile
+    const constraintLevels: MediaStreamConstraints[] = [
+      // Level 1: Mobile-optimized ideal resolution & facing mode
+      {
+        audio: false,
+        video: {
+          facingMode: { ideal: preferredFacingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       },
-    };
+      // Level 2: Simple facing mode constraint
+      {
+        audio: false,
+        video: {
+          facingMode: preferredFacingMode,
+        },
+      },
+      // Level 3: Basic video stream fallback
+      {
+        audio: false,
+        video: true,
+      },
+    ];
+
+    let lastError: any = null;
+    let stream: MediaStream | null = null;
+
+    for (const constraints of constraintLevels) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (stream) break;
+      } catch (err) {
+        console.warn('getUserMedia failed with constraint level, trying fallback:', constraints, err);
+        lastError = err;
+      }
+    }
+
+    if (!stream) {
+      throw lastError || new Error('Unable to access camera device with any supported constraints.');
+    }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       this.currentStream = stream;
       videoElement.srcObject = stream;
 
-      // Extract device ID
+      // Extract device ID if available
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         const settings = videoTrack.getSettings();
@@ -47,10 +92,16 @@ export class CameraManager {
         }
       }
 
-      await videoElement.play();
+      // Explicit play invocation with promise catch for mobile autoplay policies
+      try {
+        await videoElement.play();
+      } catch (playErr) {
+        console.warn('videoElement.play() promise rejected:', playErr);
+      }
+
       return stream;
     } catch (err) {
-      console.error('Error starting camera:', err);
+      console.error('Error attaching stream to video element:', err);
       throw err;
     }
   }

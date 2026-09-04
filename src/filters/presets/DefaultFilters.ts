@@ -8,6 +8,17 @@ import { VhsFilter } from '../implementations/VhsFilter';
 import { PixelateFilter } from '../implementations/PixelateFilter';
 import { NegativeFilter } from '../implementations/NegativeFilter';
 import { GrayscaleFilter } from '../implementations/GrayscaleFilter';
+
+// Local Real-time Filters (V2 Updated)
+import { InfraredFilter } from '../implementations/InfraredFilter';
+import { OutlineFilter } from '../implementations/OutlineFilter';
+import { EnterMatrixFilter } from '../implementations/EnterMatrixFilter';
+import { SpiderVerseFilter } from '../implementations/SpiderVerseFilter';
+import { RageShiftFilter } from '../implementations/RageShiftFilter';
+import { AnimeRageFilter } from '../implementations/AnimeRageFilter';
+import { SketchFilter } from '../implementations/SketchFilter';
+
+// Additional Image Processing Filters
 import { SpectralMapFilter } from '../implementations/SpectralMapFilter';
 import { ThresholdFilter } from '../implementations/ThresholdFilter';
 import { RgbSplitFilter } from '../implementations/RgbSplitFilter';
@@ -22,6 +33,7 @@ import { MonoColorsFilter } from '../implementations/MonoColorsFilter';
 
 export function createDefaultFilters(): BaseFilter[] {
   return [
+    // 9 Core Filters
     new OriginalFilter(),
     new MoodyFilter(),
     new FilmGrainFilter(),
@@ -31,6 +43,19 @@ export function createDefaultFilters(): BaseFilter[] {
     new PixelateFilter(),
     new NegativeFilter(),
     new GrayscaleFilter(),
+
+    // V2 Updated & New Filters
+    new EnterMatrixFilter(),
+    new SpiderVerseFilter(),
+    new RageShiftFilter(),
+    new AnimeRageFilter(),
+    new SketchFilter(),
+
+    // Real-Time Visual Filters
+    new InfraredFilter(),
+    new OutlineFilter(),
+
+    // Additional Built-in Filters
     new SpectralMapFilter(),
     new ThresholdFilter(),
     new RgbSplitFilter(),
