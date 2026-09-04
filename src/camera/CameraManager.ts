@@ -4,6 +4,27 @@ export interface CameraDevice {
   facingMode?: 'user' | 'environment';
 }
 
+export type CameraErrorCode =
+  | 'SECURE_CONTEXT_REQUIRED'
+  | 'PERMISSION_DENIED'
+  | 'CAMERA_NOT_FOUND'
+  | 'CAMERA_IN_USE'
+  | 'UNSUPPORTED_BROWSER'
+  | 'OVERCONSTRAINED'
+  | 'UNKNOWN_ERROR';
+
+export class CameraError extends Error {
+  public code: CameraErrorCode;
+  public redirectHttpsUrl?: string;
+
+  constructor(code: CameraErrorCode, message: string, redirectHttpsUrl?: string) {
+    super(message);
+    this.name = 'CameraError';
+    this.code = code;
+    this.redirectHttpsUrl = redirectHttpsUrl;
+  }
+}
+
 export class CameraManager {
   private currentStream: MediaStream | null = null;
   private currentDeviceId: string | null = null;
@@ -31,6 +52,15 @@ export class CameraManager {
     // Stop existing stream if active
     this.stopCamera();
 
+    // 1. Validate browser support for navigator.mediaDevices
+    if (!navigator?.mediaDevices) {
+      throw new CameraError(
+        'UNSUPPORTED_BROWSER',
+        'Your web browser does not support WebRTC mediaDevices API. Please update your browser or use Safari/Chrome.'
+      );
+    }
+
+    // 2. Validate Secure Context (HTTPS or localhost)
     const isLocalhost =
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1' ||
@@ -41,10 +71,14 @@ export class CameraManager {
       window.location.protocol === 'https:' ||
       isLocalhost;
 
-    if (!isSecureContext || !navigator?.mediaDevices?.getUserMedia) {
+    if (!isSecureContext || !navigator.mediaDevices.getUserMedia) {
       const portSuffix = window.location.port ? `:${window.location.port}` : '';
       const httpsUrl = `https://${window.location.hostname}${portSuffix}${window.location.pathname}${window.location.hash}`;
-      throw new Error(`SECURE_CONTEXT_REQUIRED|${httpsUrl}`);
+      throw new CameraError(
+        'SECURE_CONTEXT_REQUIRED',
+        'Camera access requires a Secure Context (HTTPS or localhost). Browsers disable getUserMedia on plain HTTP network IP addresses.',
+        httpsUrl
+      );
     }
 
     // Progressive Constraint Levels to prevent OverconstrainedError on Mobile & Desktop
@@ -79,14 +113,41 @@ export class CameraManager {
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (stream) break;
-      } catch (err) {
+      } catch (err: any) {
         console.warn('getUserMedia failed with constraint level, trying fallback:', constraints, err);
         lastError = err;
       }
     }
 
     if (!stream) {
-      throw lastError || new Error('Unable to access camera device with any supported constraints.');
+      if (lastError) {
+        const errName = lastError.name || '';
+        if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+          throw new CameraError(
+            'PERMISSION_DENIED',
+            'Camera permission was denied. Please allow camera access in site permissions.'
+          );
+        }
+        if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+          throw new CameraError(
+            'CAMERA_NOT_FOUND',
+            'No camera hardware was detected on your device.'
+          );
+        }
+        if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+          throw new CameraError(
+            'CAMERA_IN_USE',
+            'Camera hardware is currently in use by another application (e.g. Zoom, Teams, or another browser tab).'
+          );
+        }
+        if (errName === 'OverconstrainedError' || errName === 'ConstraintNotSatisfiedError') {
+          throw new CameraError(
+            'OVERCONSTRAINED',
+            'Camera resolution or facing mode constraint is not supported by your device.'
+          );
+        }
+      }
+      throw new CameraError('UNKNOWN_ERROR', lastError?.message || 'Unable to start camera stream.');
     }
 
     try {

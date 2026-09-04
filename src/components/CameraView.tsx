@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CameraManager } from '../camera/CameraManager';
+import { CameraManager, CameraError } from '../camera/CameraManager';
 import { CoordinateTransformer } from '../camera/CoordinateTransformer';
 import { HandTracker } from '../tracking/HandTracker';
 import { QuadGeometry, QuadPolygon } from '../geometry/QuadGeometry';
@@ -17,6 +17,8 @@ import {
   Sparkles,
   AlertCircle,
   Lock,
+  CameraOff,
+  VideoOff,
 } from 'lucide-react';
 
 interface CameraViewProps {
@@ -29,8 +31,12 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadingText, setLoadingText] = useState('Initializing HandFrame Engine...');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [redirectHttpsUrl, setRedirectHttpsUrl] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{
+    title: string;
+    message: string;
+    code?: string;
+    redirectUrl?: string;
+  } | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -81,14 +87,13 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     const initEngine = async () => {
       try {
         if (!videoRef.current || !canvasRef.current) return;
-        setErrorMessage(null);
-        setRedirectHttpsUrl(null);
+        setErrorDetails(null);
         setIsLoading(true);
 
         // 1. Initialize Compositor
         compositorRef.current = new QuadCompositor();
 
-        // 2. Start Camera after explicit user interaction ("Start HandFrame")
+        // 2. Start Camera after explicit user action
         setLoadingText('Requesting Camera Stream...');
         await cameraManagerRef.current.startCamera(videoRef.current, 'user');
         if (!isMounted) return;
@@ -112,19 +117,68 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         console.error('HandFrame engine initialization error:', err);
         if (isMounted) {
           setIsLoading(false);
-          if (err?.message?.startsWith('SECURE_CONTEXT_REQUIRED')) {
-            const parts = err.message.split('|');
-            const targetUrl = parts[1] || '';
-            setRedirectHttpsUrl(targetUrl);
-            setErrorMessage(
-              'Camera access requires a Secure Context (HTTPS or localhost). Web browsers block camera access over plain HTTP network addresses.'
-            );
-          } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            setErrorMessage('Camera access was denied. Please allow camera permission in your browser site settings and retry.');
-          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            setErrorMessage('No camera hardware was detected on your device.');
+
+          if (err instanceof CameraError) {
+            switch (err.code) {
+              case 'SECURE_CONTEXT_REQUIRED':
+                setErrorDetails({
+                  title: 'HTTPS Security Required',
+                  message:
+                    'Camera access requires a Secure Context (HTTPS or localhost). Mobile Safari & Chrome disable camera access on plain HTTP IP addresses.',
+                  code: err.code,
+                  redirectUrl: err.redirectHttpsUrl,
+                });
+                break;
+
+              case 'PERMISSION_DENIED':
+                setErrorDetails({
+                  title: 'Camera Permission Denied',
+                  message:
+                    'Camera permission was blocked. Please allow camera permissions in your browser site settings (lock icon in address bar) and retry.',
+                  code: err.code,
+                });
+                break;
+
+              case 'CAMERA_NOT_FOUND':
+                setErrorDetails({
+                  title: 'No Camera Detected',
+                  message: 'No camera hardware was found on your device. Please plug in or enable a camera.',
+                  code: err.code,
+                });
+                break;
+
+              case 'CAMERA_IN_USE':
+                setErrorDetails({
+                  title: 'Camera Currently In Use',
+                  message:
+                    'Your camera is in use by another app (e.g. Zoom, Teams, or another browser tab). Please close other camera apps and retry.',
+                  code: err.code,
+                });
+                break;
+
+              case 'UNSUPPORTED_BROWSER':
+                setErrorDetails({
+                  title: 'Browser Not Supported',
+                  message: 'Your web browser does not support WebRTC mediaDevices API. Please update your browser or use Safari/Chrome.',
+                  code: err.code,
+                });
+                break;
+
+              case 'OVERCONSTRAINED':
+              case 'UNKNOWN_ERROR':
+              default:
+                setErrorDetails({
+                  title: 'Camera Access Error',
+                  message: err.message || 'Failed to initialize local camera. Please retry.',
+                  code: err.code,
+                });
+                break;
+            }
           } else {
-            setErrorMessage('Failed to initialize local camera stream. Please ensure camera permissions are granted.');
+            setErrorDetails({
+              title: 'Engine Error',
+              message: err?.message || 'An unexpected error occurred during camera initialization.',
+            });
           }
         }
       }
@@ -295,6 +349,21 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     }
   };
 
+  const renderErrorIcon = () => {
+    if (!errorDetails) return null;
+    switch (errorDetails.code) {
+      case 'SECURE_CONTEXT_REQUIRED':
+        return <Lock className="w-12 h-12 text-amber-400 mb-4 animate-pulse" />;
+      case 'CAMERA_IN_USE':
+        return <VideoOff className="w-12 h-12 text-orange-400 mb-4 animate-pulse" />;
+      case 'CAMERA_NOT_FOUND':
+      case 'PERMISSION_DENIED':
+        return <CameraOff className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />;
+      default:
+        return <AlertCircle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />;
+    }
+  };
+
   return (
     <div className="relative w-screen h-dvh bg-black overflow-hidden select-none">
       {/* Active WebRTC video element (rendered transparently for mobile video frame decoding) */}
@@ -330,22 +399,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       )}
 
       {/* Error Overlay */}
-      {errorMessage && (
+      {errorDetails && (
         <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 text-center">
-          {redirectHttpsUrl ? (
-            <Lock className="w-12 h-12 text-amber-400 mb-4 animate-pulse" />
-          ) : (
-            <AlertCircle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
-          )}
-          <h2 className="text-white text-lg font-semibold mb-2">
-            {redirectHttpsUrl ? 'HTTPS Security Required' : 'Camera Access Issue'}
-          </h2>
-          <p className="text-white/70 text-xs max-w-sm mb-6 leading-relaxed">{errorMessage}</p>
+          {renderErrorIcon()}
+          <h2 className="text-white text-lg font-semibold mb-2">{errorDetails.title}</h2>
+          <p className="text-white/70 text-xs max-w-sm mb-6 leading-relaxed">{errorDetails.message}</p>
 
           <div className="flex flex-wrap justify-center gap-3">
-            {redirectHttpsUrl ? (
+            {errorDetails.redirectUrl ? (
               <button
-                onClick={() => (window.location.href = redirectHttpsUrl)}
+                onClick={() => (window.location.href = errorDetails.redirectUrl!)}
                 className="px-5 py-2.5 bg-emerald-500 text-black text-xs font-semibold rounded-full hover:bg-emerald-400 transition-all shadow-lg active:scale-95"
               >
                 Switch to HTTPS Version
