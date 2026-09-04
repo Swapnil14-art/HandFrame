@@ -3,64 +3,77 @@ import { BaseFilter } from '../types/FilterTypes';
 export class AnimeRageFilter implements BaseFilter {
   public id = 'anime_rage';
   public displayName = 'Anime Rage';
-  public description = 'Dark dramatic anime rage frame with bright white eye linework and flickering aura energy lines';
+  public description = 'Extreme high-contrast monochrome anime rage frame with pitch-black subject and rapidly flowing white energy strokes';
   public category = 'Artistic' as const;
-  public version = '1.0.0';
+  public version = '2.0.0';
 
   public apply(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // Time-dependent flicker for procedural anime energy lines
-    const time = Date.now() / 40;
+    // Time-dependent continuous animation driver for fluid energy strokes
+    const t = Date.now() / 35;
 
-    // Convert to luminance buffer
+    // 1. Compute grayscale luminance buffer & edge magnitude buffer
     const gray = new Float32Array(width * height);
+    const edges = new Float32Array(width * height);
+
     for (let i = 0; i < width * height; i++) {
       const idx = i * 4;
       gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
     }
 
+    // Sobel edge detection pass for facial features & subject silhouette
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
+        const idx = y * width + x;
+
+        const gx =
+          -gray[(y - 1) * width + (x - 1)] + gray[(y - 1) * width + (x + 1)] -
+          2 * gray[y * width + (x - 1)] + 2 * gray[y * width + (x + 1)] -
+          gray[(y + 1) * width + (x - 1)] + gray[(y + 1) * width + (x + 1)];
+
+        const gy =
+          -gray[(y - 1) * width + (x - 1)] - 2 * gray[(y - 1) * width + x] - gray[(y - 1) * width + (x + 1)] +
+          gray[(y + 1) * width + (x - 1)] + 2 * gray[(y + 1) * width + x] + gray[(y + 1) * width + (x + 1)];
+
+        edges[idx] = Math.sqrt(gx * gx + gy * gy);
+      }
+    }
+
+    // 2. High-contrast render pass: Pitch Black subject + Pure White chaotic energy lines & facial outlines
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
         const outIdx = (y * width + x) * 4;
-        const lum = gray[y * width + x];
+        const edge = edges[y * width + x];
 
-        // Sobel edge detection for eyes, facial contours, and fingers
-        const gx = -gray[(y - 1) * width + (x - 1)] + gray[(y - 1) * width + (x + 1)] -
-                   2 * gray[y * width + (x - 1)] + 2 * gray[y * width + (x + 1)] -
-                   gray[(y + 1) * width + (x - 1)] + gray[(y + 1) * width + (x + 1)];
+        // Procedural anime energy turbulence equations creating organic, branching white aura strokes
+        const n1 = Math.sin(x * 0.07 + t * 2.3 + Math.cos(y * 0.04 - t * 1.7));
+        const n2 = Math.cos(y * 0.09 - t * 2.9 + Math.sin(x * 0.05 + t * 1.3));
+        const n3 = Math.sin((x + y) * 0.12 - t * 3.5);
+        const energyFlow = n1 * n2 + n3 * 0.5;
 
-        const gy = -gray[(y - 1) * width + (x - 1)] - 2 * gray[(y - 1) * width + x] - gray[(y - 1) * width + (x + 1)] +
-                   gray[(y + 1) * width + (x - 1)] + 2 * gray[(y + 1) * width + x] + gray[(y + 1) * width + (x + 1)];
+        // Energy aura expands from structural edge boundaries
+        const isNearEdge = edge > 22;
+        const isStrongEdge = edge > 42; // Eyes, nose, mouth, fingers, jawline, clothing contours
 
-        const edgeMag = Math.sqrt(gx * gx + gy * gy);
+        // White energy stroke condition: near edges + turbulent noise threshold
+        const isEnergyStroke = isNearEdge && energyFlow > 0.38;
 
-        // Procedural flickering anime energy streak lines around strong edges
-        const wave = Math.sin((x * 0.12 + y * 0.18 + time)) * Math.cos((y * 0.15 - x * 0.1 + time * 0.8));
-        const isEnergySpark = edgeMag > 35 && wave > 0.65;
-
-        // Dark dramatic manga base backdrop preserving facial features
-        let r = Math.round(data[outIdx] * 0.22);
-        let g = Math.round(data[outIdx + 1] * 0.22);
-        let b = Math.round(data[outIdx + 2] * 0.28);
-
-        if (edgeMag > 55 || isEnergySpark) {
-          // Bright white / electric cyan eye & energy linework
-          r = 245;
-          g = 250;
-          b = 255;
-        } else if (lum > 170) {
-          // Highlight contrast
-          r = Math.min(255, r + 40);
-          g = Math.min(255, g + 40);
-          b = Math.min(255, b + 60);
+        if (isStrongEdge || isEnergyStroke) {
+          // Pure White high-contrast anime stroke
+          outData[outIdx]     = 255;
+          outData[outIdx + 1] = 255;
+          outData[outIdx + 2] = 255;
+          outData[outIdx + 3] = 255;
+        } else {
+          // Pitch Black background and subject body
+          outData[outIdx]     = 5;
+          outData[outIdx + 1] = 5;
+          outData[outIdx + 2] = 8;
+          outData[outIdx + 3] = 255;
         }
-
-        outData[outIdx]     = r;
-        outData[outIdx + 1] = g;
-        outData[outIdx + 2] = b;
       }
     }
 
