@@ -18,17 +18,31 @@ export interface HandFramePoints {
   isGraceFrame?: boolean;
 }
 
+interface PointVelocity {
+  vx: number;
+  vy: number;
+}
+
 export class HandTracker {
   private handLandmarker: HandLandmarker | null = null;
   private isInitializing: boolean = false;
   private isReady: boolean = false;
 
-  // Temporal persistence & grace period state
+  // Temporal persistence & short-term predictive grace period
   private lastValidPoints: HandFramePoints | null = null;
+  private lastTimestamp: number = 0;
   private graceFramesCount: number = 0;
-  private readonly maxGraceFrames: number = 12; // ~350ms grace period at 30fps
+  private readonly maxGraceFrames: number = 10; // ~300ms grace period at 30+ fps
 
-  // Temporal palm center tracking to prevent MediaPipe classification flips during 180° rotation
+  // Velocity tracking per fingertip landmark for short-term prediction
+  private velocities: { P1: PointVelocity; P2: PointVelocity; P3: PointVelocity; P4: PointVelocity } = {
+    P1: { vx: 0, vy: 0 },
+    P2: { vx: 0, vy: 0 },
+    P3: { vx: 0, vy: 0 },
+    P4: { vx: 0, vy: 0 },
+  };
+
+  // Temporal palm center tracking to maintain hand identity during 180° rotations & hand crossing
   private lastLeftCenter: Point2D | null = null;
   private lastRightCenter: Point2D | null = null;
 
@@ -49,9 +63,9 @@ export class HandTracker {
         },
         runningMode: 'VIDEO',
         numHands: 2,
-        minHandDetectionConfidence: 0.4,
-        minHandPresenceConfidence: 0.4,
-        minTrackingConfidence: 0.4,
+        minHandDetectionConfidence: 0.45,
+        minHandPresenceConfidence: 0.45,
+        minTrackingConfidence: 0.45,
       });
 
       this.isReady = true;
@@ -71,9 +85,9 @@ export class HandTracker {
           },
           runningMode: 'VIDEO',
           numHands: 2,
-          minHandDetectionConfidence: 0.35,
-          minHandPresenceConfidence: 0.35,
-          minTrackingConfidence: 0.35,
+          minHandDetectionConfidence: 0.4,
+          minHandPresenceConfidence: 0.4,
+          minTrackingConfidence: 0.4,
         });
 
         this.isReady = true;
@@ -102,27 +116,52 @@ export class HandTracker {
     if (!this.handLandmarker || !this.isReady) return null;
     if (videoElement.readyState < 2) return null;
 
+    const dt = this.lastTimestamp > 0 ? Math.max(0.005, (timestamp - this.lastTimestamp) / 1000) : 0.033;
+    this.lastTimestamp = timestamp;
+
     try {
       const results = this.handLandmarker.detectForVideo(videoElement, timestamp);
 
       const hasTwoHands = results && results.landmarks && results.landmarks.length >= 2;
 
       if (!hasTwoHands) {
-        // TEMPORAL GRACE PERIOD: Retain last valid points during temporary tracking drops
+        // PREDICTIVE GRACE PERIOD: Extrapolate with damped velocity during short tracking drops
         if (this.lastValidPoints && this.graceFramesCount < this.maxGraceFrames) {
           this.graceFramesCount++;
-          return {
-            ...this.lastValidPoints,
+          const decay = Math.pow(0.82, this.graceFramesCount);
+
+          const P1: Point2D = {
+            x: Math.min(1, Math.max(0, this.lastValidPoints.P1.x + this.velocities.P1.vx * dt * decay)),
+            y: Math.min(1, Math.max(0, this.lastValidPoints.P1.y + this.velocities.P1.vy * dt * decay)),
+          };
+          const P2: Point2D = {
+            x: Math.min(1, Math.max(0, this.lastValidPoints.P2.x + this.velocities.P2.vx * dt * decay)),
+            y: Math.min(1, Math.max(0, this.lastValidPoints.P2.y + this.velocities.P2.vy * dt * decay)),
+          };
+          const P3: Point2D = {
+            x: Math.min(1, Math.max(0, this.lastValidPoints.P3.x + this.velocities.P3.vx * dt * decay)),
+            y: Math.min(1, Math.max(0, this.lastValidPoints.P3.y + this.velocities.P3.vy * dt * decay)),
+          };
+          const P4: Point2D = {
+            x: Math.min(1, Math.max(0, this.lastValidPoints.P4.x + this.velocities.P4.vx * dt * decay)),
+            y: Math.min(1, Math.max(0, this.lastValidPoints.P4.y + this.velocities.P4.vy * dt * decay)),
+          };
+
+          const predictedPoints: HandFramePoints = {
+            P1,
+            P2,
+            P3,
+            P4,
+            confidence: Math.max(0.2, this.lastValidPoints.confidence * 0.9),
             status: 'TRACKING_DEGRADED',
             isGraceFrame: true,
           };
+          this.lastValidPoints = predictedPoints;
+          return predictedPoints;
         }
 
         // Grace period expired
-        this.lastValidPoints = null;
-        this.lastLeftCenter = null;
-        this.lastRightCenter = null;
-        this.graceFramesCount = 0;
+        this.resetHistory();
         return null;
       }
 
@@ -139,18 +178,46 @@ export class HandTracker {
       const score1 = results.handednesses?.[1]?.[0]?.score || 0.85;
       const confidence = (score0 + score1) / 2;
 
-      // Extract points strictly in absolute semantic order:
-      // LEFT_THUMB (landmark 4) → LEFT_INDEX (landmark 8) → RIGHT_INDEX (landmark 8) → RIGHT_THUMB (landmark 4)
+      // MANDATORY ABSOLUTE SEMANTIC FINGERTIP ORDERING:
+      // P1: LEFT_THUMB  (landmark 4 of Left Hand)
+      // P2: LEFT_INDEX  (landmark 8 of Left Hand)
+      // P3: RIGHT_INDEX (landmark 8 of Right Hand)
+      // P4: RIGHT_THUMB (landmark 4 of Right Hand)
       const leftThumb: Point2D  = { x: leftHand[4].x,  y: leftHand[4].y };
       const leftIndex: Point2D  = { x: leftHand[8].x,  y: leftHand[8].y };
       const rightIndex: Point2D = { x: rightHand[8].x, y: rightHand[8].y };
       const rightThumb: Point2D = { x: rightHand[4].x, y: rightHand[4].y };
 
+      // Update landmark velocity vectors for short-term prediction
+      if (this.lastValidPoints) {
+        const smoothV = (newVal: number, oldVal: number, vOld: number) => {
+          const instV = (newVal - oldVal) / dt;
+          return vOld * 0.4 + instV * 0.6;
+        };
+
+        this.velocities.P1 = {
+          vx: smoothV(leftThumb.x, this.lastValidPoints.P1.x, this.velocities.P1.vx),
+          vy: smoothV(leftThumb.y, this.lastValidPoints.P1.y, this.velocities.P1.vy),
+        };
+        this.velocities.P2 = {
+          vx: smoothV(leftIndex.x, this.lastValidPoints.P2.x, this.velocities.P2.vx),
+          vy: smoothV(leftIndex.y, this.lastValidPoints.P2.y, this.velocities.P2.vy),
+        };
+        this.velocities.P3 = {
+          vx: smoothV(rightIndex.x, this.lastValidPoints.P3.x, this.velocities.P3.vx),
+          vy: smoothV(rightIndex.y, this.lastValidPoints.P3.y, this.velocities.P3.vy),
+        };
+        this.velocities.P4 = {
+          vx: smoothV(rightThumb.x, this.lastValidPoints.P4.x, this.velocities.P4.vx),
+          vy: smoothV(rightThumb.y, this.lastValidPoints.P4.y, this.velocities.P4.vy),
+        };
+      }
+
       const currentPoints: HandFramePoints = {
-        P1: leftThumb,   // LEFT_THUMB
-        P2: leftIndex,   // LEFT_INDEX
-        P3: rightIndex,  // RIGHT_INDEX
-        P4: rightThumb,  // RIGHT_THUMB
+        P1: leftThumb,
+        P2: leftIndex,
+        P3: rightIndex,
+        P4: rightThumb,
         confidence,
         status: 'TRACKING_STABLE',
         isGraceFrame: false,
@@ -236,9 +303,16 @@ export class HandTracker {
 
   public resetHistory(): void {
     this.lastValidPoints = null;
+    this.lastTimestamp = 0;
     this.lastLeftCenter = null;
     this.lastRightCenter = null;
     this.graceFramesCount = 0;
+    this.velocities = {
+      P1: { vx: 0, vy: 0 },
+      P2: { vx: 0, vy: 0 },
+      P3: { vx: 0, vy: 0 },
+      P4: { vx: 0, vy: 0 },
+    };
   }
 
   public close(): void {

@@ -65,6 +65,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
   const sessionStoreRef = useRef<FilterSessionStore>(FilterSessionStore.getInstance());
 
   const animationFrameIdRef = useRef<number | null>(null);
+  const videoFrameCallbackIdRef = useRef<number | null>(null);
   const lastQuadRef = useRef<QuadPolygon | null>(null);
 
   // Performance & inference frame caching refs
@@ -113,7 +114,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
         setIsLoading(false);
 
-        // 5. Start main requestAnimationFrame loop
+        // 5. Start main requestAnimationFrame / requestVideoFrameCallback loop
         startRenderLoop();
       } catch (err: any) {
         console.error('HandFrame engine initialization error:', err);
@@ -206,6 +207,9 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
       }
+      if (videoFrameCallbackIdRef.current && videoRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
+        (videoRef.current as any).cancelVideoFrameCallback(videoFrameCallbackIdRef.current);
+      }
 
       cameraManagerRef.current.stopCamera();
       handTrackerRef.current.close();
@@ -213,10 +217,12 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
   }, []);
 
   const startRenderLoop = () => {
-    const loop = (timestamp: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const processFrame = (timestamp: number) => {
       const startTime = performance.now();
 
-      const video = videoRef.current;
       const canvas = canvasRef.current;
       const tracker = handTrackerRef.current;
       const compositor = compositorRef.current;
@@ -264,9 +270,12 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               P4: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P4, transformConfig),
             };
 
-            quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current);
+            quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current, timestamp);
             lastQuadRef.current = quad;
           } else {
+            if (lastQuadRef.current) {
+              QuadGeometry.resetFilter();
+            }
             lastQuadRef.current = null;
           }
 
@@ -317,10 +326,22 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         }
       }
 
-      animationFrameIdRef.current = requestAnimationFrame(loop);
+      // Schedule next frame using requestVideoFrameCallback (if supported) or requestAnimationFrame fallback
+      scheduleNextFrame();
     };
 
-    animationFrameIdRef.current = requestAnimationFrame(loop);
+    const scheduleNextFrame = () => {
+      const v = videoRef.current;
+      if (!v) return;
+
+      if ('requestVideoFrameCallback' in v && typeof (v as any).requestVideoFrameCallback === 'function') {
+        videoFrameCallbackIdRef.current = (v as any).requestVideoFrameCallback((now: number) => processFrame(now));
+      } else {
+        animationFrameIdRef.current = requestAnimationFrame((now: number) => processFrame(now));
+      }
+    };
+
+    scheduleNextFrame();
   };
 
   const handleManualNextFilter = () => {

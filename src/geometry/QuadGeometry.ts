@@ -1,4 +1,5 @@
 import { Point2D } from '../camera/CoordinateTransformer';
+import { QuadOneEuroFilter } from '../tracking/OneEuroFilter';
 
 export interface QuadPolygon {
   P1: Point2D; // LEFT_THUMB
@@ -9,46 +10,28 @@ export interface QuadPolygon {
 
 export class QuadGeometry {
   /**
-   * Adaptive velocity-aware temporal smoothing.
-   * Dynamically adjusts alpha based on velocity to eliminate static jitter while keeping zero movement lag.
+   * One Euro Filter Instance per session for adaptive velocity-aware temporal smoothing.
+   */
+  private static filterInstance = new QuadOneEuroFilter();
+
+  /**
+   * Smooths quadrilateral points using One Euro Filter or velocity-adaptive filter.
    */
   public static smoothQuad(
     current: QuadPolygon,
     previous: QuadPolygon | null,
-    minAlpha: number = 0.3,
-    maxAlpha: number = 0.85
+    timestampMs: number = performance.now()
   ): QuadPolygon {
-    if (!previous) return current;
+    if (!previous) {
+      this.filterInstance.reset();
+      return this.filterInstance.filter(current, timestampMs);
+    }
 
-    // Calculate maximum movement speed among all 4 points
-    const d1 = this.dist(current.P1, previous.P1);
-    const d2 = this.dist(current.P2, previous.P2);
-    const d3 = this.dist(current.P3, previous.P3);
-    const d4 = this.dist(current.P4, previous.P4);
-    const maxMove = Math.max(d1, d2, d3, d4);
+    return this.filterInstance.filter(current, timestampMs);
+  }
 
-    // Dynamic alpha: slow movement = minAlpha (silky smooth), fast movement = maxAlpha (instant response)
-    const velocityFactor = Math.min(1.0, maxMove / 45.0); // 45px speed cap
-    const alpha = minAlpha + (maxAlpha - minAlpha) * velocityFactor;
-
-    return {
-      P1: {
-        x: previous.P1.x + (current.P1.x - previous.P1.x) * alpha,
-        y: previous.P1.y + (current.P1.y - previous.P1.y) * alpha,
-      },
-      P2: {
-        x: previous.P2.x + (current.P2.x - previous.P2.x) * alpha,
-        y: previous.P2.y + (current.P2.y - previous.P2.y) * alpha,
-      },
-      P3: {
-        x: previous.P3.x + (current.P3.x - previous.P3.x) * alpha,
-        y: previous.P3.y + (current.P3.y - previous.P3.y) * alpha,
-      },
-      P4: {
-        x: previous.P4.x + (current.P4.x - previous.P4.x) * alpha,
-        y: previous.P4.y + (current.P4.y - previous.P4.y) * alpha,
-      },
-    };
+  public static resetFilter(): void {
+    this.filterInstance.reset();
   }
 
   /**
@@ -92,11 +75,5 @@ export class QuadGeometry {
     const height = Math.max(1, maxY - minY);
 
     return { minX, minY, maxX, maxY, width, height };
-  }
-
-  private static dist(a: Point2D, b: Point2D): number {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 }
