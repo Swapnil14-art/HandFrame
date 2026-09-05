@@ -13,7 +13,6 @@ import { GrayscaleFilter } from '../implementations/GrayscaleFilter';
 import { InfraredFilter } from '../implementations/InfraredFilter';
 import { OutlineFilter } from '../implementations/OutlineFilter';
 import { EnterMatrixFilter } from '../implementations/EnterMatrixFilter';
-import { SpiderVerseFilter } from '../implementations/SpiderVerseFilter';
 import { RageShiftFilter } from '../implementations/RageShiftFilter';
 import { AnimeRageFilter } from '../implementations/AnimeRageFilter';
 import { MovingRageMotionFilter } from '../implementations/MovingRageMotionFilter';
@@ -48,7 +47,6 @@ export function createDefaultFilters(): BaseFilter[] {
 
     // V2 Updated & New Filters
     new EnterMatrixFilter(),
-    new SpiderVerseFilter(),
     new RageShiftFilter(),
     new AnimeRageFilter(),
     new MovingRageMotionFilter(),
