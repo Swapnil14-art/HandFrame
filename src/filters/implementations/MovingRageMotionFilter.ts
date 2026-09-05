@@ -17,14 +17,14 @@ export class MovingRageMotionFilter implements BaseFilter {
     const t = now / 35;
     const shakeTime = now / 18;
 
-    // High-frequency minute earthquake jitter offsets (oscillating around anchor 0,0)
-    const dx = Math.sin(shakeTime * 0.83) * 2.4 + Math.cos(shakeTime * 1.57) * 1.3;
-    const dy = Math.cos(shakeTime * 0.91) * 2.4 + Math.sin(shakeTime * 1.41) * 1.3;
+    // High-frequency minute earthquake jitter offsets (oscillating around anchor 0,0) - 2x shake amplitude
+    const dx = Math.sin(shakeTime * 0.83) * 4.8 + Math.cos(shakeTime * 1.57) * 2.6;
+    const dy = Math.cos(shakeTime * 0.91) * 4.8 + Math.sin(shakeTime * 1.41) * 2.6;
 
     // Center coordinates for tiny rotational jitter
     const cx = width / 2;
     const cy = height / 2;
-    const angleJitter = Math.sin(shakeTime * 0.45) * 0.012; // ~0.7 degrees rotational jitter
+    const angleJitter = Math.sin(shakeTime * 0.45) * 0.024; // ~1.4 degrees rotational jitter (~2x)
     const cosA = Math.cos(angleJitter);
     const sinA = Math.sin(angleJitter);
 

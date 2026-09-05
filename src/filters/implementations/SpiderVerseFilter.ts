@@ -2,17 +2,17 @@ import { BaseFilter } from '../types/FilterTypes';
 
 export class SpiderVerseFilter implements BaseFilter {
   public id = 'spider_verse';
-  public displayName = 'Spider-Verse';
-  public description = 'Vibrant comic-animation style with controlled registration RGB split, thin ink outlines, and subtle micro honeycomb texture';
+  public displayName = 'Oil Painting';
+  public description = 'Rich digital oil-paste painting aesthetic with visible brush-like color blending, vibrant depth, and preserved details';
   public category = 'Artistic' as const;
-  public version = '2.0.0';
+  public version = '3.0.0';
 
   public apply(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // 1. Compute grayscale luminance buffer & Sobel edge buffer
+    // 1. Compute grayscale luminance buffer & Sobel edge buffer for subtle structural preservation
     const gray = new Float32Array(width * height);
     const edges = new Float32Array(width * height);
 
@@ -21,7 +21,7 @@ export class SpiderVerseFilter implements BaseFilter {
       gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
     }
 
-    // Sobel edge detection pass for clean, thin ink outlines & registration alignment
+    // Sobel edge pass to find key structural contours (eyes, lips, high-contrast borders)
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
         const idx = y * width + x;
@@ -39,84 +39,123 @@ export class SpiderVerseFilter implements BaseFilter {
       }
     }
 
-    const chromaticOffset = 2; // Restrained 2px registration offset around edges
+    // Radius for Kuwahara-like quadrant brush blending (radius 3 = 7x7 window)
+    const radius = 3;
+    const qCount = 4 * 4; // 16 pixels per quadrant in radius 3
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+    for (let y = radius; y < height - radius; y++) {
+      for (let x = radius; x < width - radius; x++) {
         const outIdx = (y * width + x) * 4;
         const edge = edges[y * width + x];
         const lum = gray[y * width + x];
 
-        // 2. Controlled Comic-Print Registration Misalignment (RGB split on/near edges only)
-        let origR = data[outIdx];
-        let origG = data[outIdx + 1];
-        let origB = data[outIdx + 2];
+        // 2. Oil Painting Kuwahara-style Quadrant Filtering (Find lowest variance quadrant)
+        // 4 Quadrants: Q0 (Top-Left), Q1 (Top-Right), Q2 (Bottom-Left), Q3 (Bottom-Right)
+        let meanR0 = 0, meanG0 = 0, meanB0 = 0, sqR0 = 0, sqG0 = 0, sqB0 = 0;
+        let meanR1 = 0, meanG1 = 0, meanB1 = 0, sqR1 = 0, sqG1 = 0, sqB1 = 0;
+        let meanR2 = 0, meanG2 = 0, meanB2 = 0, sqR2 = 0, sqG2 = 0, sqB2 = 0;
+        let meanR3 = 0, meanG3 = 0, meanB3 = 0, sqR3 = 0, sqG3 = 0, sqB3 = 0;
 
-        if (edge > 25) {
-          const rx = Math.min(width - 1, Math.max(0, x + chromaticOffset));
-          const bx = Math.min(width - 1, Math.max(0, x - chromaticOffset));
-          const rIdx = (y * width + rx) * 4;
-          const bIdx = (y * width + bx) * 4;
-
-          origR = data[rIdx];
-          origB = data[bIdx + 2];
+        // Q0: Top-Left [-radius, 0] x [-radius, 0]
+        for (let dy = -radius; dy <= 0; dy++) {
+          for (let dx = -radius; dx <= 0; dx++) {
+            const pIdx = ((y + dy) * width + (x + dx)) * 4;
+            const pr = data[pIdx];
+            const pg = data[pIdx + 1];
+            const pb = data[pIdx + 2];
+            meanR0 += pr; meanG0 += pg; meanB0 += pb;
+            sqR0 += pr * pr; sqG0 += pg * pg; sqB0 += pb * pb;
+          }
         }
 
-        // 3. Vibrant Spider-Verse Color Grading & Saturation Boost
-        // Saturation amplification (1.45x)
-        let rSat = lum + 1.45 * (origR - lum);
-        let gSat = lum + 1.35 * (origG - lum);
-        let bSat = lum + 1.50 * (origB - lum);
-
-        // Spider-Verse signature palette tinting: Deep blues/purples in shadows, vivid crimson in midtones, cyan accents in highlights
-        if (lum < 100) {
-          // Deep Spider-Man suit blue/purple shadow depth
-          rSat = rSat * 0.90 + 12;
-          gSat = gSat * 0.85 + 5;
-          bSat = bSat * 1.10 + 25;
-        } else if (lum < 200) {
-          // Punchy comic midtone crimson & warm skin pop
-          rSat = rSat * 1.12 + 15;
-          gSat = gSat * 1.02;
-          bSat = bSat * 0.95;
-        } else {
-          // High-tech Spider-Verse electric cyan / white highlights
-          rSat = rSat * 1.05;
-          gSat = gSat * 1.08 + 10;
-          bSat = bSat * 1.12 + 15;
+        // Q1: Top-Right [0, radius] x [-radius, 0]
+        for (let dy = -radius; dy <= 0; dy++) {
+          for (let dx = 0; dx <= radius; dx++) {
+            const pIdx = ((y + dy) * width + (x + dx)) * 4;
+            const pr = data[pIdx];
+            const pg = data[pIdx + 1];
+            const pb = data[pIdx + 2];
+            meanR1 += pr; meanG1 += pg; meanB1 += pb;
+            sqR1 += pr * pr; sqG1 += pg * pg; sqB1 += pb * pb;
+          }
         }
 
-        // Stylized 8-level comic color quantization (smooth 3D animation feel)
-        let r = Math.min(255, Math.max(0, Math.floor(rSat / 32) * 32 + 16));
-        let g = Math.min(255, Math.max(0, Math.floor(gSat / 32) * 32 + 16));
-        let b = Math.min(255, Math.max(0, Math.floor(bSat / 32) * 32 + 16));
-
-        // 4. Subtle Micro Honeycomb / Halftone Grid (3px cell size, 12% opacity blend)
-        const hx = x % 3;
-        const hy = y % 3;
-        const isHexGridBorder = (hx === 0 && hy === 0) || (hx === 1 && hy === 2);
-
-        if (isHexGridBorder && lum < 170) {
-          // Micro CMYK print texture
-          r = Math.round(r * 0.88);
-          g = Math.round(g * 0.88);
-          b = Math.round(b * 0.92 + 8);
+        // Q2: Bottom-Left [-radius, 0] x [0, radius]
+        for (let dy = 0; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= 0; dx++) {
+            const pIdx = ((y + dy) * width + (x + dx)) * 4;
+            const pr = data[pIdx];
+            const pg = data[pIdx + 1];
+            const pb = data[pIdx + 2];
+            meanR2 += pr; meanG2 += pg; meanB2 += pb;
+            sqR2 += pr * pr; sqG2 += pg * pg; sqB2 += pb * pb;
+          }
         }
 
-        // 5. Restrained, Clean Thin Ink Outlines (integrated naturally)
-        if (edge > 65) {
-          // Thin dark ink line integrated with underlying tone
-          outData[outIdx]     = Math.round(r * 0.20 + 10);
-          outData[outIdx + 1] = Math.round(g * 0.20 + 10);
-          outData[outIdx + 2] = Math.round(b * 0.25 + 20);
-          outData[outIdx + 3] = 255;
-        } else {
-          // Rich Spider-Verse comic tone
-          outData[outIdx]     = r;
-          outData[outIdx + 1] = g;
-          outData[outIdx + 2] = b;
-          outData[outIdx + 3] = 255;
+        // Q3: Bottom-Right [0, radius] x [0, radius]
+        for (let dy = 0; dy <= radius; dy++) {
+          for (let dx = 0; dx <= radius; dx++) {
+            const pIdx = ((y + dy) * width + (x + dx)) * 4;
+            const pr = data[pIdx];
+            const pg = data[pIdx + 1];
+            const pb = data[pIdx + 2];
+            meanR3 += pr; meanG3 += pg; meanB3 += pb;
+            sqR3 += pr * pr; sqG3 += pg * pg; sqB3 += pb * pb;
+          }
         }
+
+        // Variance = E[X^2] - (E[X])^2
+        const mR0 = meanR0 / qCount, mG0 = meanG0 / qCount, mB0 = meanB0 / qCount;
+        const var0 = (sqR0 + sqG0 + sqB0) / qCount - (mR0 * mR0 + mG0 * mG0 + mB0 * mB0);
+
+        const mR1 = meanR1 / qCount, mG1 = meanG1 / qCount, mB1 = meanB1 / qCount;
+        const var1 = (sqR1 + sqG1 + sqB1) / qCount - (mR1 * mR1 + mG1 * mG1 + mB1 * mB1);
+
+        const mR2 = meanR2 / qCount, mG2 = meanG2 / qCount, mB2 = meanB2 / qCount;
+        const var2 = (sqR2 + sqG2 + sqB2) / qCount - (mR2 * mR2 + mG2 * mG2 + mB2 * mB2);
+
+        const mR3 = meanR3 / qCount, mG3 = meanG3 / qCount, mB3 = meanB3 / qCount;
+        const var3 = (sqR3 + sqG3 + sqB3) / qCount - (mR3 * mR3 + mG3 * mG3 + mB3 * mB3);
+
+        // Pick quadrant with minimum variance (smoothest color patch preserving sharp borders)
+        let minVar = var0;
+        let paintR = mR0, paintG = mG0, paintB = mB0;
+
+        if (var1 < minVar) { minVar = var1; paintR = mR1; paintG = mG1; paintB = mB1; }
+        if (var2 < minVar) { minVar = var2; paintR = mR2; paintG = mG2; paintB = mB2; }
+        if (var3 < minVar) { minVar = var3; paintR = mR3; paintG = mG3; paintB = mB3; }
+
+        // 3. Color Depth & Vibrancy Boost (Rich oil-paste pigment without muddiness)
+        const paintLum = 0.299 * paintR + 0.587 * paintG + 0.114 * paintB;
+        let rSat = paintLum + 1.28 * (paintR - paintLum);
+        let gSat = paintLum + 1.25 * (paintG - paintLum);
+        let bSat = paintLum + 1.28 * (paintB - paintLum);
+
+        // S-curve richness / contrast
+        rSat = ((rSat - 128) * 1.12) + 128;
+        gSat = ((gSat - 128) * 1.12) + 128;
+        bSat = ((bSat - 128) * 1.12) + 128;
+
+        // 4. Subtle Canvas & Impasto Paint Texture (organic canvas weave)
+        const weave = Math.sin(x * 0.75) * Math.cos(y * 0.75) * 3.5 + Math.sin((x + y) * 0.5) * 2.0;
+        rSat += weave;
+        gSat += weave;
+        bSat += weave;
+
+        // 5. Preserved details and subtle structural edge integration (no thick/cartoon lines)
+        if (edge > 95) {
+          // Subtle, thin structural darkening only on prominent edges to preserve facial features
+          const edgeDarken = Math.max(0.72, 1.0 - (edge - 95) * 0.002);
+          rSat *= edgeDarken;
+          gSat *= edgeDarken;
+          bSat *= edgeDarken;
+        }
+
+        // Clamp to 0-255
+        outData[outIdx]     = Math.min(255, Math.max(0, Math.round(rSat)));
+        outData[outIdx + 1] = Math.min(255, Math.max(0, Math.round(gSat)));
+        outData[outIdx + 2] = Math.min(255, Math.max(0, Math.round(bSat)));
+        outData[outIdx + 3] = 255;
       }
     }
 
