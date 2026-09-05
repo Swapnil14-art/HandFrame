@@ -16,6 +16,7 @@ import { EnterMatrixFilter } from '../implementations/EnterMatrixFilter';
 import { SpiderVerseFilter } from '../implementations/SpiderVerseFilter';
 import { RageShiftFilter } from '../implementations/RageShiftFilter';
 import { AnimeRageFilter } from '../implementations/AnimeRageFilter';
+import { MovingRageMotionFilter } from '../implementations/MovingRageMotionFilter';
 import { SketchFilter } from '../implementations/SketchFilter';
 import { GlitchOutFilter } from '../implementations/GlitchOutFilter';
 
@@ -50,6 +51,7 @@ export function createDefaultFilters(): BaseFilter[] {
     new SpiderVerseFilter(),
     new RageShiftFilter(),
     new AnimeRageFilter(),
+    new MovingRageMotionFilter(),
     new SketchFilter(),
     new GlitchOutFilter(),
 
