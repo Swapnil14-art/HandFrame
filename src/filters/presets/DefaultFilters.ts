@@ -18,6 +18,7 @@ import { AnimeRageFilter } from '../implementations/AnimeRageFilter';
 import { MovingRageMotionFilter } from '../implementations/MovingRageMotionFilter';
 import { SketchFilter } from '../implementations/SketchFilter';
 import { GlitchOutFilter } from '../implementations/GlitchOutFilter';
+import { RetroArcadeFilter } from '../implementations/RetroArcadeFilter';
 
 // Additional Image Processing Filters
 import { SpectralMapFilter } from '../implementations/SpectralMapFilter';
@@ -52,6 +53,7 @@ export function createDefaultFilters(): BaseFilter[] {
     new MovingRageMotionFilter(),
     new SketchFilter(),
     new GlitchOutFilter(),
+    new RetroArcadeFilter(),
 
     // Real-Time Visual Filters
     new InfraredFilter(),
