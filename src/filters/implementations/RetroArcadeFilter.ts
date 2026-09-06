@@ -1,11 +1,12 @@
 import { BaseFilter } from '../types/FilterTypes';
 
 /**
- * RetroArcadeFilter - 90s Arcade Game Visual Style
+ * RetroArcadeFilter - 16-bit 90s Arcade Game Visual Style
  * 
  * Features:
- * - Downsampled hard square pixels with nearest-neighbor rendering
+ * - High-density 16-bit pixel-art resolution with crisp hard square pixels (nearest-neighbor)
  * - Punchy 16-color adaptive palette tailored to camera scene + classic 90s arcade tones
+ * - 16-bit ordered checkerboard dithering between palette colors for classic 90s console/arcade shading
  * - Crisp high-contrast pixel-art outlines around subject contours (hands, fingers, face, clothing)
  * - Zero blur, zero soft gradients, zero smoothing
  * - 100% local real-time performance
@@ -13,17 +14,17 @@ import { BaseFilter } from '../types/FilterTypes';
 export class RetroArcadeFilter implements BaseFilter {
   public id = 'retro_arcade';
   public displayName = 'Retro Arcade';
-  public description = '90s arcade-game visual style with adaptive 16-color palette and high-contrast pixel boundaries';
+  public description = '16-bit arcade-game visual style with adaptive 16-color palette and high-contrast pixel boundaries';
   public category = 'Retro' as const;
-  public version = '1.0.0';
+  public version = '1.1.0';
 
   public apply(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // Determine grid block size for crisp square pixels
-    const blockSize = Math.max(4, Math.min(8, Math.floor(Math.min(width, height) / 55))) || 6;
+    // 16-bit Arcade Grid Resolution (finer 2-4px pixel blocks for 16-bit arcade sprite aesthetic)
+    const blockSize = Math.max(2, Math.min(4, Math.floor(Math.min(width, height) / 95))) || 3;
     const gridW = Math.ceil(width / blockSize);
     const gridH = Math.ceil(height / blockSize);
     const totalCells = gridW * gridH;
@@ -158,8 +159,8 @@ export class RetroArcadeFilter implements BaseFilter {
     // Cap palette strictly to 16 colors
     const finalPalette = palette.slice(0, 16);
 
-    // 3. Pass 2: Edge detection & nearest-neighbor block rendering
-    const edgeThreshold = 38; // Threshold for structural pixel-art outline detection
+    // 3. Pass 2: Edge detection & 16-bit pixel-art rendering with ordered checkerboard dithering
+    const edgeThreshold = 32; // Crisp threshold for structural pixel-art outline detection
 
     for (let gy = 0; gy < gridH; gy++) {
       const startY = gy * blockSize;
@@ -183,23 +184,32 @@ export class RetroArcadeFilter implements BaseFilter {
           maxEdgeDiff = Math.max(maxEdgeDiff, Math.abs(curLum - downLum));
         }
 
-        let targetR: number;
-        let targetG: number;
-        let targetB: number;
+        let primaryR: number;
+        let primaryG: number;
+        let primaryB: number;
+        let secondaryR: number;
+        let secondaryG: number;
+        let secondaryB: number;
+        let isDithered = false;
 
         if (maxEdgeDiff > edgeThreshold) {
           // Strong edge boundary (hands, fingers, face, clothing contours) -> Dark Arcade Pixel Outline
-          targetR = finalPalette[0][0]; // Deep Shadow Black outline
-          targetG = finalPalette[0][1];
-          targetB = finalPalette[0][2];
+          primaryR = finalPalette[0][0]; // Deep Shadow Black outline
+          primaryG = finalPalette[0][1];
+          primaryB = finalPalette[0][2];
+          secondaryR = primaryR;
+          secondaryG = primaryG;
+          secondaryB = primaryB;
         } else {
-          // Map cell RGB to nearest palette color using weighted perceptual Euclidean distance
+          // Map cell RGB to 1st and 2nd nearest palette colors
           const cr = cellR[cellIdx];
           const cg = cellG[cellIdx];
           const cb = cellB[cellIdx];
 
           let bestDist = Infinity;
           let bestIdx = 0;
+          let secondDist = Infinity;
+          let secondIdx = 0;
 
           for (let p = 0; p < finalPalette.length; p++) {
             const [pr, pg, pb] = finalPalette[p];
@@ -207,27 +217,45 @@ export class RetroArcadeFilter implements BaseFilter {
             const dg = cg - pg;
             const db = cb - pb;
 
-            // Weighted perceptual color distance
             const dist = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
             if (dist < bestDist) {
+              secondDist = bestDist;
+              secondIdx = bestIdx;
               bestDist = dist;
               bestIdx = p;
+            } else if (dist < secondDist) {
+              secondDist = dist;
+              secondIdx = p;
             }
           }
 
-          targetR = finalPalette[bestIdx][0];
-          targetG = finalPalette[bestIdx][1];
-          targetB = finalPalette[bestIdx][2];
+          primaryR = finalPalette[bestIdx][0];
+          primaryG = finalPalette[bestIdx][1];
+          primaryB = finalPalette[bestIdx][2];
+
+          // 16-bit ordered checkerboard dither condition: if cell is in midtone region between 1st & 2nd palette colors
+          if (secondDist < bestDist * 1.85 && bestIdx !== 0 && bestIdx !== 1) {
+            secondaryR = finalPalette[secondIdx][0];
+            secondaryG = finalPalette[secondIdx][1];
+            secondaryB = finalPalette[secondIdx][2];
+            isDithered = true;
+          } else {
+            secondaryR = primaryR;
+            secondaryG = primaryG;
+            secondaryB = primaryB;
+          }
         }
 
-        // Nearest-neighbor solid block fill (hard square pixels, no blur)
+        // Nearest-neighbor block fill with 16-bit checkerboard pattern (hard square pixels, no blur)
         for (let y = startY; y < endY; y++) {
           const rowOffset = y * width;
           for (let x = startX; x < endX; x++) {
             const outIdx = (rowOffset + x) * 4;
-            outData[outIdx]     = targetR;
-            outData[outIdx + 1] = targetG;
-            outData[outIdx + 2] = targetB;
+            const useSecondary = isDithered && ((gx + gy) % 2 === 1);
+            
+            outData[outIdx]     = useSecondary ? secondaryR : primaryR;
+            outData[outIdx + 1] = useSecondary ? secondaryG : primaryG;
+            outData[outIdx + 2] = useSecondary ? secondaryB : primaryB;
             outData[outIdx + 3] = 255;
           }
         }
