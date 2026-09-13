@@ -32,8 +32,10 @@ import { BwDazeFilter } from '../implementations/BwDazeFilter';
 import { ReverseHeatmapFilter } from '../implementations/ReverseHeatmapFilter';
 import { GreenPixelFilter } from '../implementations/GreenPixelFilter';
 import { MonoColorsFilter } from '../implementations/MonoColorsFilter';
+import { CutoutFilter } from '../implementations/CutoutFilter';
 
 export function createDefaultFilters(): BaseFilter[] {
+
   return [
     // 9 Core Filters
     new OriginalFilter(),
@@ -71,5 +73,7 @@ export function createDefaultFilters(): BaseFilter[] {
     new ReverseHeatmapFilter(),
     new GreenPixelFilter(),
     new MonoColorsFilter(),
+    new CutoutFilter(),
   ];
 }
+

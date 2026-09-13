@@ -176,8 +176,10 @@ Filters are independent visual processing modules registered in the system. The 
 * **Grayscale:** Classic monochrome black-and-white conversion.
 * **Sepia:** Warm antique brown monochrome tone.
 * **Retro Flash:** High-exposure vintage camera flash aesthetic.
+* **Cutout:** Cardboard cutout illusion where the scene outside the HandFrame is pure black (#000000) and the frame acts as a physical window revealing the live camera image with natural colors and full brightness.
 
 These filters serve as standard built-in presets defined by the application's central filter registry.
+
 
 ---
 

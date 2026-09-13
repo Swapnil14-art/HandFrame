@@ -74,6 +74,41 @@ export class QuadCompositor {
     mainCtx.fillStyle = '#000000';
     mainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
 
+    const isCutout = Boolean(activeFilter.isCutout || activeFilter.id === 'cutout');
+
+    if (isCutout) {
+      // Cutout effect: Cardboard cutout illusion
+      // Everything OUTSIDE the HandFrame quadrilateral is pure black (#000000).
+      // Everything INSIDE the HandFrame quadrilateral shows the original camera image with natural colors.
+      if (!quad) return;
+
+      const bbox = QuadGeometry.getBoundingBox(quad, canvasWidth, canvasHeight);
+      if (bbox.width <= 2 || bbox.height <= 2) return;
+
+      // Draw camera video strictly inside the clipped HandFrame quadrilateral
+      mainCtx.save();
+      mainCtx.beginPath();
+      mainCtx.moveTo(quad.P1.x, quad.P1.y);
+      mainCtx.lineTo(quad.P2.x, quad.P2.y);
+      mainCtx.lineTo(quad.P3.x, quad.P3.y);
+      mainCtx.lineTo(quad.P4.x, quad.P4.y);
+      mainCtx.closePath();
+      mainCtx.clip();
+
+      if (isMirrored) {
+        mainCtx.translate(canvasWidth, 0);
+        mainCtx.scale(-1, 1);
+        mainCtx.drawImage(videoElement, offsetX, offsetY, renderWidth, renderHeight);
+      } else {
+        mainCtx.drawImage(videoElement, offsetX, offsetY, renderWidth, renderHeight);
+      }
+      mainCtx.restore();
+
+      // Bounding guides & fingertip indicators
+      this.renderBoundingGuides(mainCtx, quad);
+      return;
+    }
+
     // 1. Draw background video stream maintaining exact native aspect ratio without stretching
     mainCtx.save();
     if (isMirrored) {
@@ -125,6 +160,13 @@ export class QuadCompositor {
     }
 
     // 6. Draw subtle HandFrame bounding line & fingertip indicators
+    this.renderBoundingGuides(mainCtx, quad);
+  }
+
+  /**
+   * Draws subtle HandFrame bounding line & fingertip indicators.
+   */
+  private renderBoundingGuides(mainCtx: CanvasRenderingContext2D, quad: QuadPolygon): void {
     mainCtx.save();
     mainCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
     mainCtx.lineWidth = 1.5;
@@ -150,3 +192,4 @@ export class QuadCompositor {
     mainCtx.restore();
   }
 }
+

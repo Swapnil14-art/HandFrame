@@ -28,4 +28,11 @@ export interface BaseFilter extends FilterMetadata {
    * @returns Processed ImageData object of identical dimensions.
    */
   apply(imageData: ImageData): ImageData;
+
+  /**
+   * If true, indicates a cardboard cutout effect where the exterior of the HandFrame
+   * quadrilateral is filled with pure black (#000000) and the interior displays the live video.
+   */
+  readonly isCutout?: boolean;
 }
+
