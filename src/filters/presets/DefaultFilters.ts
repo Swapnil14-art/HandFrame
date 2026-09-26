@@ -1,20 +1,14 @@
 import { BaseFilter } from '../types/FilterTypes';
 import { OriginalFilter } from '../implementations/OriginalFilter';
-import { MoodyFilter } from '../implementations/MoodyFilter';
 import { FilmGrainFilter } from '../implementations/FilmGrainFilter';
-import { CinematicFilter } from '../implementations/CinematicFilter';
-import { Y2kDigicamFilter } from '../implementations/Y2kDigicamFilter';
-import { VhsFilter } from '../implementations/VhsFilter';
 import { PixelateFilter } from '../implementations/PixelateFilter';
 import { NegativeFilter } from '../implementations/NegativeFilter';
 import { GrayscaleFilter } from '../implementations/GrayscaleFilter';
 
 // Local Real-time Filters (V2 Updated)
-import { InfraredFilter } from '../implementations/InfraredFilter';
 import { OutlineFilter } from '../implementations/OutlineFilter';
 import { EnterMatrixFilter } from '../implementations/EnterMatrixFilter';
 import { RageShiftFilter } from '../implementations/RageShiftFilter';
-import { AnimeRageFilter } from '../implementations/AnimeRageFilter';
 import { MovingRageMotionFilter } from '../implementations/MovingRageMotionFilter';
 import { SketchFilter } from '../implementations/SketchFilter';
 import { GlitchOutFilter } from '../implementations/GlitchOutFilter';
@@ -24,55 +18,36 @@ import { RetroArcadeFilter } from '../implementations/RetroArcadeFilter';
 import { SpectralMapFilter } from '../implementations/SpectralMapFilter';
 import { ThresholdFilter } from '../implementations/ThresholdFilter';
 import { RgbSplitFilter } from '../implementations/RgbSplitFilter';
-import { LightGlowFilter } from '../implementations/LightGlowFilter';
-import { PaletteMapFilter } from '../implementations/PaletteMapFilter';
-import { PosterizeFilter } from '../implementations/PosterizeFilter';
-import { RaysFilter } from '../implementations/RaysFilter';
 import { BwDazeFilter } from '../implementations/BwDazeFilter';
 import { ReverseHeatmapFilter } from '../implementations/ReverseHeatmapFilter';
-import { GreenPixelFilter } from '../implementations/GreenPixelFilter';
-import { MonoColorsFilter } from '../implementations/MonoColorsFilter';
 import { CutoutFilter } from '../implementations/CutoutFilter';
 
 export function createDefaultFilters(): BaseFilter[] {
-
   return [
-    // 9 Core Filters
+    // Core Filters
     new OriginalFilter(),
-    new MoodyFilter(),
     new FilmGrainFilter(),
-    new CinematicFilter(),
-    new Y2kDigicamFilter(),
-    new VhsFilter(),
     new PixelateFilter(),
     new NegativeFilter(),
     new GrayscaleFilter(),
 
-    // V2 Updated & New Filters
+    // V2 Updated & Dynamic Filters
     new EnterMatrixFilter(),
     new RageShiftFilter(),
-    new AnimeRageFilter(),
     new MovingRageMotionFilter(),
     new SketchFilter(),
     new GlitchOutFilter(),
     new RetroArcadeFilter(),
 
     // Real-Time Visual Filters
-    new InfraredFilter(),
     new OutlineFilter(),
 
     // Additional Built-in Filters
     new SpectralMapFilter(),
     new ThresholdFilter(),
     new RgbSplitFilter(),
-    new LightGlowFilter(),
-    new PaletteMapFilter(),
-    new PosterizeFilter(),
-    new RaysFilter(),
     new BwDazeFilter(),
     new ReverseHeatmapFilter(),
-    new GreenPixelFilter(),
-    new MonoColorsFilter(),
     new CutoutFilter(),
   ];
 }
