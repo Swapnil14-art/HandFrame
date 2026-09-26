@@ -3,8 +3,8 @@ import { LandingPage } from '../components/LandingPage';
 import { CameraView } from '../components/CameraView';
 import { UnlistedFilterEditor } from '../components/UnlistedFilterEditor';
 
-// Configurable unlisted route path defaulting to /aesthetic14
-const UNLISTED_ROUTE_PATH = (import.meta.env.VITE_FILTER_EDITOR_PATH || '/aesthetic14').replace(/^\/+/, '');
+// Configurable unlisted route path defaulting to /custom
+const UNLISTED_ROUTE_PATH = (import.meta.env.VITE_FILTER_EDITOR_PATH || '/custom').replace(/^\/+/, '');
 
 export const SimpleRouter: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<'landing' | 'camera' | 'unlisted-editor'>('landing');

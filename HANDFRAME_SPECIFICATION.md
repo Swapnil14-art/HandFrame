@@ -57,7 +57,7 @@ The preferred technology stack for the web implementation is strictly client-sid
 * **Accelerated Effects:** WebGL used selectively only when it provides a meaningful performance improvement for expensive visual filters. Do not introduce unnecessary rendering frameworks merely for complexity.
 
 ### 2.5 Route Environment Configuration
-* **Environment Variable:** Route configuration for the unlisted filter management page must be configurable via environment variables (e.g. `import.meta.env.VITE_FILTER_EDITOR_PATH`), defaulting to `/aesthetic14`.
+* **Environment Variable:** Route configuration for the unlisted filter management page must be configurable via environment variables (e.g. `import.meta.env.VITE_FILTER_EDITOR_PATH`), defaulting to `/custom`.
 
 ### 2.6 Persistence & Backend Requirement
 * **Backend Requirement:** None. No user registration, authentication, database, or backend server is required.
@@ -235,9 +235,9 @@ export interface BaseFilter {
 ### 8.1 Concept & Purpose
 HandFrame features a built-in set of predefined filters. While standard users experience the default filter suite, a dedicated **unlisted, temporary filter management route** allows users to temporarily add, remove, or reorder built-in filters for their local browser session.
 
-### 8.2 Unlisted Route Specification (`/aesthetic14`)
-* **Default Route Path:** `/aesthetic14`
-* **Environment Variable Override:** The route path must be configurable via an environment variable (e.g. `VITE_FILTER_EDITOR_PATH`), defaulting to `/aesthetic14`.
+### 8.2 Unlisted Route Specification (`/custom`)
+* **Default Route Path:** `/custom`
+* **Environment Variable Override:** The route path must be configurable via an environment variable (e.g. `VITE_FILTER_EDITOR_PATH`), defaulting to `/custom`.
 * **Zero UI Exposure / Non-Advertised Route:** This route must **NOT** be displayed, linked, or advertised anywhere in the standard frontend UI. It must not appear in:
   - Navigation bars or headers
   - Landing page buttons or text
@@ -250,7 +250,7 @@ HandFrame features a built-in set of predefined filters. While standard users ex
 ```text
 Normal Frontend (Landing / Camera)  ─── [No links to editor]
                                           
-Direct URL Input (/aesthetic14)   ───▶ Unlisted Filter Editor Page
+Direct URL Input (/custom)   ───▶ Unlisted Filter Editor Page
 ```
 
 ### 8.3 In-Memory & Reload Reset Behavior
@@ -410,7 +410,7 @@ Landing Page
    └── Start HandFrame (Fullscreen Camera Experience)
 ```
 
-*(Note: The filter management route `/aesthetic14` is unlisted and not linked anywhere in the navigation tree).*
+*(Note: The filter management route `/custom` is unlisted and not linked anywhere in the navigation tree).*
 
 ### 13.1 Landing Page
 A clean, elegant introduction communicating the core concept:
@@ -546,8 +546,8 @@ MCP tools must not introduce external runtime dependencies into the client appli
 3. No links, buttons, or mentions of the filter editor are visible anywhere in the UI.
 4. HandFrame cycles through the standard built-in filter suite using the 4-finger pinch gesture.
 
-### 20.2 Special Route User Workflow (`/aesthetic14`)
-1. User manually navigates to `/aesthetic14` (or configured env path).
+### 20.2 Special Route User Workflow (`/custom`)
+1. User manually navigates to `/custom` (or configured env path).
 2. The unlisted filter management page renders with built-in filter toggles and reordering handles.
 3. User temporarily adds, removes, or reorders built-in filters.
 4. The temporary filter list immediately updates the local session gesture cycle.
