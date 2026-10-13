@@ -634,14 +634,17 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
         {/* Top-Right Controls */}
         <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Capture Snapshot */}
+          {/* Capture Snapshot with visible on-screen shortcut badge */}
           <button
             onClick={handleTakeSnapshot}
-            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
-            title="Capture Snapshot (S)"
+            className="relative group w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
+            title="Capture Snapshot (Press 'S')"
             aria-label="Capture Snapshot"
           >
-            <Camera className="w-4 h-4" />
+            <Camera className="w-4 h-4 text-white/90 group-hover:text-emerald-400 transition-colors" />
+            <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-zinc-900 border border-white/20 text-[9px] font-mono text-emerald-400 font-bold rounded shadow leading-tight">
+              S
+            </span>
           </button>
 
           {/* Switch Camera */}
@@ -657,35 +660,44 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
           {/* Toggle Fullscreen Mode */}
           <button
             onClick={toggleFullscreen}
-            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
+            className="relative w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
             title="Toggle Fullscreen (F)"
             aria-label="Toggle Fullscreen"
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-zinc-900 border border-white/20 text-[9px] font-mono text-white/70 font-semibold rounded shadow leading-tight">
+              F
+            </span>
           </button>
 
           {/* Shortcuts / Help */}
           <button
             onClick={() => setIsHelpOpen((prev) => !prev)}
-            className={`w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all shadow-lg active:scale-95 ${
+            className={`relative w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all shadow-lg active:scale-95 ${
               isHelpOpen ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' : 'text-white/80 hover:text-white hover:bg-black/60'
             }`}
             title="Keyboard Shortcuts & Gestures (H / ?)"
             aria-label="Keyboard Shortcuts & Gestures"
           >
             <HelpCircle className="w-4 h-4" />
+            <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-zinc-900 border border-white/20 text-[9px] font-mono text-white/70 font-semibold rounded shadow leading-tight">
+              H
+            </span>
           </button>
 
           {/* Toggle Debug Overlay */}
           <button
             onClick={() => setIsDebugOpen((prev) => !prev)}
-            className={`w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all shadow-lg active:scale-95 ${
+            className={`relative w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all shadow-lg active:scale-95 ${
               isDebugOpen ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' : 'text-white/80 hover:text-white hover:bg-black/60'
             }`}
             title="Toggle Debug Overlay (D)"
             aria-label="Toggle Debug Overlay"
           >
             <Bug className="w-4 h-4" />
+            <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-zinc-900 border border-white/20 text-[9px] font-mono text-white/70 font-semibold rounded shadow leading-tight">
+              D
+            </span>
           </button>
         </div>
       </div>
@@ -723,9 +735,31 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-        <span className="text-[10px] text-white/40 mt-2 tracking-wide font-light">
-          Pinch 4 fingertips together or use keyboard arrows to cycle
-        </span>
+
+        {/* On-Screen Shortcut Badges Bar */}
+        <div className="flex items-center gap-2 mt-2.5 text-[10px] text-white/60 tracking-wide font-normal flex-wrap justify-center pointer-events-auto">
+          <button
+            onClick={handleTakeSnapshot}
+            className="bg-black/50 backdrop-blur-md border border-white/10 hover:border-emerald-500/50 hover:bg-black/70 px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-white/80 active:scale-95"
+            title="Capture snapshot now"
+          >
+            <Camera className="w-3 h-3 text-emerald-400" />
+            <kbd className="px-1 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded font-mono font-bold text-[9px]">S</kbd>
+            <span className="text-white/90 font-medium">Snapshot</span>
+          </button>
+          <span className="bg-black/50 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-white/80">
+            <kbd className="px-1 py-0.2 bg-white/10 rounded font-mono text-white/90 text-[9px]">Space / Arrows</kbd>
+            <span>Cycle Filter</span>
+          </span>
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-black/50 backdrop-blur-md border border-white/10 hover:border-white/30 px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-white/80 active:scale-95"
+            title="View all shortcuts and gestures"
+          >
+            <kbd className="px-1 py-0.2 bg-white/10 rounded font-mono text-white/90 text-[9px]">H</kbd>
+            <span>Help</span>
+          </button>
+        </div>
       </div>
     </div>
   );
