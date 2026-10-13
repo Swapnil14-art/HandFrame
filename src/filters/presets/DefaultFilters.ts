@@ -21,7 +21,6 @@ import { RgbSplitFilter } from '../implementations/RgbSplitFilter';
 import { BwDazeFilter } from '../implementations/BwDazeFilter';
 import { ReverseHeatmapFilter } from '../implementations/ReverseHeatmapFilter';
 import { CutoutFilter } from '../implementations/CutoutFilter';
-import { CyberpunkNeonFilter } from '../implementations/CyberpunkNeonFilter';
 
 export function createDefaultFilters(): BaseFilter[] {
   return [
@@ -39,7 +38,6 @@ export function createDefaultFilters(): BaseFilter[] {
     new SketchFilter(),
     new GlitchOutFilter(),
     new RetroArcadeFilter(),
-    new CyberpunkNeonFilter(),
 
     // Real-Time Visual Filters
     new OutlineFilter(),
