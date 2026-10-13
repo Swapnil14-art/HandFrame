@@ -146,6 +146,19 @@ export class FilterSessionStore {
   }
 
   /**
+   * Moves to previous enabled filter in the active cycle.
+   */
+  public previousFilter(): BaseFilter {
+    if (this.activeFilterIds.length <= 1) {
+      return this.getCurrentFilter();
+    }
+
+    this.currentIndex = (this.currentIndex - 1 + this.activeFilterIds.length) % this.activeFilterIds.length;
+    this.notifyListeners();
+    return this.getCurrentFilter();
+  }
+
+  /**
    * Selects a filter by ID directly if present in active list.
    */
   public selectFilterById(id: string): void {

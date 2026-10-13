@@ -19,6 +19,12 @@ import {
   Lock,
   CameraOff,
   VideoOff,
+  Camera,
+  HelpCircle,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Keyboard,
 } from 'lucide-react';
 
 interface CameraViewProps {
@@ -41,6 +47,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isFlashing, setIsFlashing] = useState(false);
   const [debugData, setDebugData] = useState<DebugData>({
     fps: 0,
     latencyMs: 0,
@@ -189,12 +197,29 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
     initEngine();
 
-    // Keyboard shortcut handler for Debug mode (D key) & Fullscreen (F key)
+    // Keyboard shortcut handler for navigation, capture, debug, fullscreen & help
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') {
+        return;
+      }
+
       if (e.key === 'd' || e.key === 'D') {
         setIsDebugOpen((prev) => !prev);
       } else if (e.key === 'f' || e.key === 'F') {
         toggleFullscreen();
+      } else if (e.key === 's' || e.key === 'S') {
+        handleTakeSnapshot();
+      } else if (e.key === 'h' || e.key === 'H' || e.key === '?') {
+        setIsHelpOpen((prev) => !prev);
+      } else if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        handleManualNextFilter();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleManualPreviousFilter();
+      } else if (e.key === 'Escape') {
+        setIsHelpOpen(false);
+        setIsDebugOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -361,10 +386,36 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     scheduleNextFrame();
   };
 
-  const handleManualNextFilter = () => {
+  function handleManualNextFilter() {
     const next = sessionStoreRef.current.nextFilter();
     setToastMessage(next.displayName);
-  };
+  }
+
+  function handleManualPreviousFilter() {
+    const prev = sessionStoreRef.current.previousFilter();
+    setToastMessage(prev.displayName);
+  }
+
+  function handleTakeSnapshot() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    try {
+      setIsFlashing(true);
+      setTimeout(() => setIsFlashing(false), 200);
+
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      link.download = `HandFrame-${timestamp}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      setToastMessage('📸 Snapshot Saved!');
+    } catch (err) {
+      console.error('Failed to capture snapshot:', err);
+    }
+  }
 
   const handleSwitchCamera = async () => {
     if (!videoRef.current) return;
@@ -435,6 +486,13 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         className="absolute inset-0 w-full h-full object-cover"
       />
 
+      {/* Camera Shutter Flash Animation */}
+      <div
+        className={`absolute inset-0 bg-white pointer-events-none transition-opacity duration-200 z-40 ${
+          isFlashing ? 'opacity-80' : 'opacity-0'
+        }`}
+      />
+
       {/* Loading Overlay */}
       {isLoading && (
         <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-lg flex flex-col items-center justify-center p-6 text-center">
@@ -485,6 +543,83 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         <DebugOverlay data={debugData} onClose={() => setIsDebugOpen(false)} />
       )}
 
+      {/* Keyboard & Gesture Shortcuts Modal */}
+      {isHelpOpen && (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-zinc-950/95 border border-white/15 rounded-2xl p-6 shadow-2xl text-white">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <Keyboard className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-semibold tracking-wide">Shortcuts & Controls</h3>
+              </div>
+              <button
+                onClick={() => setIsHelpOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-white/70 hover:text-white"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/70">Next Filter</span>
+                <div className="flex gap-1.5">
+                  <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">Space</kbd>
+                  <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">→</kbd>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/70">Previous Filter</span>
+                <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">←</kbd>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/70">Capture & Save Snapshot</span>
+                <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">S</kbd>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/70">Toggle Fullscreen</span>
+                <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">F</kbd>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/70">Debug & Landmark HUD</span>
+                <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">D</kbd>
+              </div>
+
+              <div className="flex items-center justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/70">Toggle This Guide</span>
+                <div className="flex gap-1.5">
+                  <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">H</kbd>
+                  <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">?</kbd>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-200">
+                  <p className="font-semibold text-xs mb-1 flex items-center gap-1.5">
+                    ✨ Hands-Free Gesture Cycling
+                  </p>
+                  <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+                    Bring the 4 tracked fingertips (Index & Thumb of both hands) together inside the camera view to trigger hands-free filter changes!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsHelpOpen(false)}
+              className="mt-5 w-full py-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-xs font-semibold tracking-wide transition-all active:scale-[0.98]"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Floating Top Controls Overlay */}
       <div className="absolute top-0 inset-x-0 p-4 md:p-6 flex items-center justify-between z-30 pointer-events-none">
         {/* Top-Left: Exit Camera */}
@@ -499,6 +634,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
         {/* Top-Right Controls */}
         <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Capture Snapshot */}
+          <button
+            onClick={handleTakeSnapshot}
+            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
+            title="Capture Snapshot (S)"
+            aria-label="Capture Snapshot"
+          >
+            <Camera className="w-4 h-4" />
+          </button>
+
           {/* Switch Camera */}
           <button
             onClick={handleSwitchCamera}
@@ -513,10 +658,22 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
           <button
             onClick={toggleFullscreen}
             className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
-            title="Toggle Fullscreen"
+            title="Toggle Fullscreen (F)"
             aria-label="Toggle Fullscreen"
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
+
+          {/* Shortcuts / Help */}
+          <button
+            onClick={() => setIsHelpOpen((prev) => !prev)}
+            className={`w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all shadow-lg active:scale-95 ${
+              isHelpOpen ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' : 'text-white/80 hover:text-white hover:bg-black/60'
+            }`}
+            title="Keyboard Shortcuts & Gestures (H / ?)"
+            aria-label="Keyboard Shortcuts & Gestures"
+          >
+            <HelpCircle className="w-4 h-4" />
           </button>
 
           {/* Toggle Debug Overlay */}
@@ -533,18 +690,41 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         </div>
       </div>
 
-      {/* Floating Bottom-Center Filter Indicator Pill */}
+      {/* Floating Bottom-Center Filter Indicator Pill with Prev/Next Controls */}
       <div className="absolute bottom-6 inset-x-0 flex flex-col items-center justify-center z-30 pointer-events-none">
-        <button
-          onClick={handleManualNextFilter}
-          className="pointer-events-auto group bg-black/50 backdrop-blur-md border border-white/15 px-5 py-2.5 rounded-full text-white/90 hover:text-white hover:bg-black/70 hover:border-white/30 transition-all shadow-2xl flex items-center gap-2.5 active:scale-95"
-          title="Click to cycle next filter"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-white/70 group-hover:text-white transition-colors" />
-          <span className="text-xs font-mono tracking-wider uppercase">{activeFilterName}</span>
-        </button>
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Previous Filter Button */}
+          <button
+            onClick={handleManualPreviousFilter}
+            className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white/70 hover:text-white hover:bg-black/70 flex items-center justify-center transition-all shadow-xl active:scale-90"
+            title="Previous filter (Left Arrow)"
+            aria-label="Previous filter"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Filter Indicator Pill */}
+          <button
+            onClick={handleManualNextFilter}
+            className="group bg-black/50 backdrop-blur-md border border-white/15 px-5 py-2.5 rounded-full text-white/90 hover:text-white hover:bg-black/70 hover:border-white/30 transition-all shadow-2xl flex items-center gap-2.5 active:scale-95"
+            title="Click to cycle next filter (Space / Right Arrow)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-white/70 group-hover:text-white transition-colors" />
+            <span className="text-xs font-mono tracking-wider uppercase">{activeFilterName}</span>
+          </button>
+
+          {/* Next Filter Button */}
+          <button
+            onClick={handleManualNextFilter}
+            className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white/70 hover:text-white hover:bg-black/70 flex items-center justify-center transition-all shadow-xl active:scale-90"
+            title="Next filter (Right Arrow / Space)"
+            aria-label="Next filter"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
         <span className="text-[10px] text-white/40 mt-2 tracking-wide font-light">
-          Pinch 4 fingertips together to cycle filter
+          Pinch 4 fingertips together or use keyboard arrows to cycle
         </span>
       </div>
     </div>
