@@ -49,6 +49,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownIntervalRef = useRef<number | null>(null);
   const [debugData, setDebugData] = useState<DebugData>({
     fps: 0,
     latencyMs: 0,
@@ -220,6 +222,12 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       } else if (e.key === 'Escape') {
         setIsHelpOpen(false);
         setIsDebugOpen(false);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          setCountdown(null);
+          setToastMessage('Snapshot timer cancelled');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -228,6 +236,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       isMounted = false;
       window.removeEventListener('keydown', handleKeyDown);
       unsubscribeStore();
+
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
 
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
@@ -396,7 +408,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     setToastMessage(prev.displayName);
   }
 
-  function handleTakeSnapshot() {
+  function executeCapture() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -415,6 +427,34 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     } catch (err) {
       console.error('Failed to capture snapshot:', err);
     }
+  }
+
+  function handleTakeSnapshot() {
+    // If countdown timer is already active, clicking or pressing 'S' cancels it
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+      setCountdown(null);
+      setToastMessage('Snapshot timer cancelled');
+      return;
+    }
+
+    let timeLeft = 3;
+    setCountdown(timeLeft);
+
+    countdownIntervalRef.current = window.setInterval(() => {
+      timeLeft -= 1;
+      if (timeLeft > 0) {
+        setCountdown(timeLeft);
+      } else {
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+        setCountdown(null);
+        executeCapture();
+      }
+    }, 1000);
   }
 
   const handleSwitchCamera = async () => {
@@ -492,6 +532,31 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
           isFlashing ? 'opacity-80' : 'opacity-0'
         }`}
       />
+
+      {/* 3-Second Countdown Display Overlay */}
+      {countdown !== null && (
+        <div className="absolute inset-0 z-40 pointer-events-none flex flex-col items-center justify-center">
+          <div className="relative flex items-center justify-center">
+            {/* Outer pulsating radar ring */}
+            <div className="w-36 h-36 md:w-44 md:h-44 rounded-full border-4 border-emerald-400/50 animate-ping absolute" />
+            {/* Glassmorphism badge */}
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-black/75 backdrop-blur-xl border-2 border-white/30 flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.4)]">
+              <span
+                key={countdown}
+                className="text-6xl md:text-7xl font-extrabold font-mono text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.9)] animate-pulse"
+              >
+                {countdown}
+              </span>
+            </div>
+          </div>
+          <div className="mt-5 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/15 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <p className="text-white text-xs md:text-sm font-medium tracking-wider uppercase">
+              Capturing in {countdown}s... Pose!
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Loading Overlay */}
       {isLoading && (
@@ -576,7 +641,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               </div>
 
               <div className="flex items-center justify-between py-1.5 border-b border-white/5">
-                <span className="text-white/70">Capture & Save Snapshot</span>
+                <span className="text-white/70">Capture Snapshot (3s Timer)</span>
                 <kbd className="px-2 py-0.5 bg-white/10 rounded font-mono text-white/90">S</kbd>
               </div>
 
@@ -634,16 +699,20 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
         {/* Top-Right Controls */}
         <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Capture Snapshot with visible on-screen shortcut badge */}
+          {/* Capture Snapshot with visible on-screen shortcut badge and 3s countdown */}
           <button
             onClick={handleTakeSnapshot}
-            className="relative group w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-black/60 flex items-center justify-center transition-all shadow-lg active:scale-95"
-            title="Capture Snapshot (Press 'S')"
+            className={`relative group w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-all shadow-lg active:scale-95 ${
+              countdown !== null
+                ? 'bg-emerald-500/30 border-emerald-400 text-emerald-300 animate-pulse'
+                : 'bg-black/40 border-white/10 text-white/80 hover:text-white hover:bg-black/60'
+            }`}
+            title={countdown !== null ? `Capturing in ${countdown}s (Click to cancel)` : "Capture Snapshot (Press 'S' for 3s timer)"}
             aria-label="Capture Snapshot"
           >
             <Camera className="w-4 h-4 text-white/90 group-hover:text-emerald-400 transition-colors" />
             <span className="absolute -bottom-1 -right-1 px-1 py-0.2 bg-zinc-900 border border-white/20 text-[9px] font-mono text-emerald-400 font-bold rounded shadow leading-tight">
-              S
+              {countdown !== null ? `${countdown}s` : 'S'}
             </span>
           </button>
 
@@ -740,12 +809,20 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         <div className="flex items-center gap-2 mt-2.5 text-[10px] text-white/60 tracking-wide font-normal flex-wrap justify-center pointer-events-auto">
           <button
             onClick={handleTakeSnapshot}
-            className="bg-black/50 backdrop-blur-md border border-white/10 hover:border-emerald-500/50 hover:bg-black/70 px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-white/80 active:scale-95"
-            title="Capture snapshot now"
+            className={`backdrop-blur-md border px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all text-white/80 active:scale-95 ${
+              countdown !== null
+                ? 'bg-emerald-500/30 border-emerald-400 text-emerald-300 animate-pulse'
+                : 'bg-black/50 border-white/10 hover:border-emerald-500/50 hover:bg-black/70'
+            }`}
+            title="3s delayed snapshot (S)"
           >
             <Camera className="w-3 h-3 text-emerald-400" />
-            <kbd className="px-1 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded font-mono font-bold text-[9px]">S</kbd>
-            <span className="text-white/90 font-medium">Snapshot</span>
+            <kbd className="px-1 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded font-mono font-bold text-[9px]">
+              {countdown !== null ? `${countdown}s` : 'S'}
+            </kbd>
+            <span className="text-white/90 font-medium">
+              {countdown !== null ? `Capturing (${countdown}s)` : 'Snapshot (3s)'}
+            </span>
           </button>
           <span className="bg-black/50 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-white/80">
             <kbd className="px-1 py-0.2 bg-white/10 rounded font-mono text-white/90 text-[9px]">Space / Arrows</kbd>
