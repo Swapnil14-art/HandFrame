@@ -35,7 +35,7 @@ export class RetroArcadeFilter implements BaseFilter {
     const cellB = new Uint8Array(totalCells);
     const cellLum = new Float32Array(totalCells);
 
-    // 1. Pass 1: Compute average RGB and luminance per cell
+    // 1. Pass 1: Pixel Block Downsampling (Downscales resolution to classic 16-bit arcade sprite grid)
     for (let gy = 0; gy < gridH; gy++) {
       const startY = gy * blockSize;
       const endY = Math.min(height, (gy + 1) * blockSize);
@@ -68,13 +68,14 @@ export class RetroArcadeFilter implements BaseFilter {
           cellR[cellIdx] = r;
           cellG[cellIdx] = g;
           cellB[cellIdx] = b;
+          // Perceptual luminance calculation (BT.601)
           cellLum[cellIdx] = 0.299 * r + 0.587 * g + 0.114 * b;
         }
       }
     }
 
-    // 2. Build Dynamic 16-Color Adaptive Arcade Palette
-    // 6 Core Arcade Master Anchor Colors (RGB)
+    // 2. Pass 2: Dynamic 16-Color Palette Generation (Color Quantization)
+    // Combines 6 master anchor arcade tones with top 10 dominant colors from camera scene
     const palette: Array<[number, number, number]> = [
       [10, 10, 16],    // 0: Deep Shadow Black
       [245, 245, 255], // 1: Arcade Crisp White
@@ -84,8 +85,8 @@ export class RetroArcadeFilter implements BaseFilter {
       [255, 215, 0],   // 5: Sunburst Yellow
     ];
 
-    // Build 3D Color Frequency Histogram (4x4x4 grid) to find top 10 dominant scene colors
-    const histogram = new Int32Array(64); // 4 * 4 * 4
+    // Build 3D Color Frequency Histogram: 4x4x4 = 64 color bins (dividing 0-255 into 4 chunks)
+    const histogram = new Int32Array(64);
     const binSumR = new Float64Array(64);
     const binSumG = new Float64Array(64);
     const binSumB = new Float64Array(64);
@@ -94,7 +95,7 @@ export class RetroArcadeFilter implements BaseFilter {
       const rBin = Math.min(3, Math.floor(cellR[i] / 64));
       const gBin = Math.min(3, Math.floor(cellG[i] / 64));
       const bBin = Math.min(3, Math.floor(cellB[i] / 64));
-      const binIdx = (rBin << 4) | (gBin << 2) | bBin;
+      const binIdx = (rBin << 4) | (gBin << 2) | bBin; // Pack into 6-bit index
 
       histogram[binIdx]++;
       binSumR[binIdx] += cellR[i];

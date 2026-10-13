@@ -7,6 +7,12 @@ export class FilmGrainFilter implements BaseFilter {
   readonly category = 'Film' as const;
   readonly version = '1.0.0';
 
+  /**
+   * Emulates analog 35mm silver-halide film stock:
+   * 1. Converts input to perceptual black-and-white luminance.
+   * 2. Adds dynamic uniform noise (in range [-30, +30]) to simulate optical film grain particles.
+   * 3. Clamps result into [0, 255].
+   */
   apply(imageData: ImageData): ImageData {
     const data = imageData.data;
     const len = data.length;
@@ -16,10 +22,10 @@ export class FilmGrainFilter implements BaseFilter {
       const g = data[i + 1];
       const b = data[i + 2];
 
-      // Convert to monochrome luminance
+      // Convert to monochrome luminance (BT.601 standard)
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-      // Add dynamic noise (-30 to +30)
+      // Add high-frequency random noise (-30 to +30)
       const noise = (Math.random() - 0.5) * 60;
       const grainVal = Math.min(255, Math.max(0, lum + noise));
 

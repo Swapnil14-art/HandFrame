@@ -3,13 +3,20 @@ import { LandingPage } from '../components/LandingPage';
 import { CameraView } from '../components/CameraView';
 import { UnlistedFilterEditor } from '../components/UnlistedFilterEditor';
 
-// Configurable unlisted route path defaulting to /custom
+// Unlisted route for accessing the custom filter creation tool (default: /custom)
 const UNLISTED_ROUTE_PATH = (import.meta.env.VITE_FILTER_EDITOR_PATH || '/custom').replace(/^\/+/, '');
 
+/**
+ * Lightweight Single-Page App (SPA) Router:
+ * Avoids heavy routing libraries (like react-router-dom) while supporting:
+ * 1. HTML5 History API (`window.history.pushState` and `popstate` event for back/forward buttons).
+ * 2. Hash routing fallback (`hashchange` event) for static hosting environments (e.g. GitHub Pages).
+ */
 export const SimpleRouter: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<'landing' | 'camera' | 'unlisted-editor'>('landing');
 
   useEffect(() => {
+    // Parses either window.location.pathname (/camera) or window.location.hash (#/camera)
     const parseLocation = () => {
       const pathname = window.location.pathname.replace(/^\/+/, '');
       const hash = window.location.hash.replace(/^#\/*/, '');
@@ -35,6 +42,9 @@ export const SimpleRouter: React.FC = () => {
     };
   }, []);
 
+  /**
+   * Programmatic client-side navigation updating browser history without page reload.
+   */
   const navigateTo = (route: 'landing' | 'camera' | 'unlisted-editor') => {
     setCurrentRoute(route);
     if (route === 'landing') {

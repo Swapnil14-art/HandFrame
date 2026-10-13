@@ -220,6 +220,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     const video = videoRef.current;
     if (!video) return;
 
+    /**
+     * Core Real-Time Frame Loop:
+     * Executes once per camera frame. Coordinates:
+     * 1. MediaPipe AI hand detection (with frame caching optimization).
+     * 2. Coordinate transformation (normalized -> canvas pixels with aspect-ratio cover).
+     * 3. One Euro temporal smoothing.
+     * 4. Gesture controller state machine check.
+     * 5. Canvas regional filter compositing.
+     * 6. Live FPS and inference latency measurement.
+     */
     const processFrame = (timestamp: number) => {
       const startTime = performance.now();
 
@@ -231,7 +241,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
       if (video && canvas && tracker && compositor && video.readyState >= 2) {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
-          // Resize canvas to match displayed window/element bounds
+          // Keep canvas dimensions synced with the browser window / viewport
           const displayWidth = canvas.clientWidth || window.innerWidth;
           const displayHeight = canvas.clientHeight || window.innerHeight;
 
@@ -242,7 +252,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const isMirrored = cameraManagerRef.current.isMirrored();
 
-          // 1. Optimized Hand Landmark Detection: Run MediaPipe inference ONLY when video frame advances
+          // Optimization: Only run heavy MediaPipe AI inference when the camera hardware produces a NEW frame
           let landmarksResult = cachedLandmarksResultRef.current;
           if (video.currentTime !== lastVideoTimeRef.current) {
             lastVideoTimeRef.current = video.currentTime;
@@ -261,8 +271,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               objectFit: 'cover' as const,
             };
 
-            // Map MediaPipe normalized (0..1) coordinates to canvas pixels
-            // MANDATORY SEMANTIC ORDER: P1=LEFT_THUMB, P2=LEFT_INDEX, P3=RIGHT_INDEX, P4=RIGHT_THUMB
+            // Convert normalized MediaPipe points [0..1] to pixel canvas coordinates
+            // Strict semantic order: P1=Left Thumb, P2=Left Index, P3=Right Index, P4=Right Thumb
             const rawQuad: QuadPolygon = {
               P1: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P1, transformConfig),
               P2: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P2, transformConfig),
@@ -270,16 +280,18 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
               P4: CoordinateTransformer.normalizedToCanvasPoint(landmarksResult.P4, transformConfig),
             };
 
+            // Apply One Euro adaptive low-pass filter to smooth vertex motion
             quad = QuadGeometry.smoothQuad(rawQuad, lastQuadRef.current, timestamp);
             lastQuadRef.current = quad;
           } else {
+            // Hand tracking lost: reset filter memory to avoid jumping on re-acquisition
             if (lastQuadRef.current) {
               QuadGeometry.resetFilter();
             }
             lastQuadRef.current = null;
           }
 
-          // 2. Process Gesture State Machine
+          // Evaluate pinch gesture state machine (advances filter on fingertip collapse)
           const gestureResult = gestureControllerRef.current.processFrame(
             landmarksResult
               ? {
@@ -292,11 +304,11 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
             startTime
           );
 
-          // 3. Render Canvas & Apply Regional Filter
+          // Composite camera frame and apply the active filter inside the quadrilateral
           const currentFilter = sessionStore.getCurrentFilter();
           compositor.renderFrame(ctx, video, canvas.width, canvas.height, quad, currentFilter, isMirrored);
 
-          // 4. Update FPS & Latency metrics
+          // Measure actual rendered FPS
           frameCountRef.current++;
           const now = performance.now();
           if (now - lastFpsTimeRef.current >= 1000) {
@@ -307,7 +319,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
 
           const latencyMs = Math.round(performance.now() - startTime);
 
-          // Update debug state periodically if debug panel is open
+          // Throttle debug UI updates to avoid unnecessary React re-renders
           if (isDebugOpen && Math.random() < 0.1) {
             setDebugData({
               fps: currentFpsRef.current,
@@ -326,14 +338,19 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
         }
       }
 
-      // Schedule next frame using requestVideoFrameCallback (if supported) or requestAnimationFrame fallback
+      // Schedule next frame
       scheduleNextFrame();
     };
 
+    /**
+     * Schedules next frame using requestVideoFrameCallback (preferred for webcams)
+     * or standard requestAnimationFrame fallback.
+     */
     const scheduleNextFrame = () => {
       const v = videoRef.current;
       if (!v) return;
 
+      // requestVideoFrameCallback fires only when a fresh hardware frame is delivered by the camera
       if ('requestVideoFrameCallback' in v && typeof (v as any).requestVideoFrameCallback === 'function') {
         videoFrameCallbackIdRef.current = (v as any).requestVideoFrameCallback((now: number) => processFrame(now));
       } else {

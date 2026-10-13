@@ -1,6 +1,13 @@
 import { BaseFilter } from '../filters/types/FilterTypes';
 import { FilterRegistry } from '../filters/registry/FilterRegistry';
 
+/**
+ * FilterSessionStore:
+ * Central state store managing active filter order and selection.
+ * Design Patterns Used:
+ * 1. Singleton Pattern: Ensures one single store instance across all React components and animation loops.
+ * 2. Observer Pattern: Components subscribe to changes and update reactively without prop-drilling.
+ */
 export class FilterSessionStore {
   private static instance: FilterSessionStore;
   private registry = FilterRegistry.getInstance();
@@ -8,19 +15,22 @@ export class FilterSessionStore {
   // Active filter IDs in the order they cycle
   private activeFilterIds: string[] = [];
 
-  // Temporary session-only custom filter IDs
+  // Temporary session-only custom filter IDs (cleared upon reset)
   private customFilterIds: string[] = [];
   
-  // Current selected index
+  // Current active filter pointer
   private currentIndex: number = 0;
 
-  // Event listeners for UI updates
+  // Set of callback listeners (Observer pattern)
   private listeners: Set<() => void> = new Set();
 
   private constructor() {
     this.resetToDefaults();
   }
 
+  /**
+   * Singleton accessor: returns the single shared store instance.
+   */
   public static getInstance(): FilterSessionStore {
     if (!FilterSessionStore.instance) {
       FilterSessionStore.instance = new FilterSessionStore();
@@ -122,7 +132,8 @@ export class FilterSessionStore {
   }
 
   /**
-   * Advances to next enabled filter in active cycle.
+   * Advances to next enabled filter in the active cycle.
+   * Uses modular ring buffer arithmetic: (index + 1) % length to wrap around seamlessly.
    */
   public nextFilter(): BaseFilter {
     if (this.activeFilterIds.length <= 1) {

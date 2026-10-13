@@ -1,6 +1,14 @@
 import React from 'react';
 import { GestureState } from '../gesture/GestureController';
 
+/**
+ * Real-time Telemetry Data for Live Demonstration:
+ * - fps: Measured hardware render rate (frames per second).
+ * - latencyMs: Combined pipeline latency (detection + smoothing + filter compositing) in milliseconds.
+ * - gestureState: Current state of the GestureController FSM (READY, APPROACHING, TRIGGERED, etc.).
+ * - distanceNorm: Normalized distance of fingertips from centroid (trigger threshold is 0.055).
+ * - confidence: MediaPipe neural network hand presence probability score.
+ */
 export interface DebugData {
   fps: number;
   latencyMs: number;
@@ -20,6 +28,10 @@ interface DebugOverlayProps {
   onClose: () => void;
 }
 
+/**
+ * Developer HUD Overlay toggled via the 'D' keyboard shortcut or header icon.
+ * Displays live performance and tracking diagnostics during presentation.
+ */
 export const DebugOverlay: React.FC<DebugOverlayProps> = ({ data, onClose }) => {
   return (
     <div className="fixed bottom-20 left-4 z-40 bg-black/80 backdrop-blur-md text-emerald-400 font-mono text-[11px] p-4 rounded-xl border border-emerald-500/20 shadow-2xl space-y-1.5 w-72 pointer-events-auto">

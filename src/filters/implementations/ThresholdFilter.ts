@@ -9,6 +9,11 @@ export class ThresholdFilter implements BaseFilter {
 
   private threshold: number = 120;
 
+  /**
+   * Binary Thresholding (Image Segmentation):
+   * Classifies pixels into strictly two states: pure black (0) or pure white (255)
+   * based on whether perceptual luminance exceeds the threshold cut-off (120).
+   */
   public apply(imageData: ImageData): ImageData {
     const { data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), imageData.width, imageData.height);
@@ -16,7 +21,9 @@ export class ThresholdFilter implements BaseFilter {
 
     const len = data.length;
     for (let i = 0; i < len; i += 4) {
+      // Calculate perceptual luminance
       const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      // Binary segmentation: >= 120 -> 255 (white), < 120 -> 0 (black)
       const val = lum >= this.threshold ? 255 : 0;
 
       outData[i]     = val;

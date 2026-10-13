@@ -12,19 +12,21 @@ export class MovingRageMotionFilter implements BaseFilter {
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // Time-dependent continuous animation driver for fluid energy strokes & earthquake shake
+    // 1. Earthquake Screen Shake Simulation:
+    // Uses combined multi-frequency harmonic sines & cosines to generate natural, non-repetitive camera rumble
     const now = Date.now();
     const t = now / 35;
     const shakeTime = now / 18;
 
-    // High-frequency minute earthquake jitter offsets (oscillating around anchor 0,0) - 2x shake amplitude
+    // Linear translation shake offsets (dx, dy)
     const dx = Math.sin(shakeTime * 0.83) * 4.8 + Math.cos(shakeTime * 1.57) * 2.6;
     const dy = Math.cos(shakeTime * 0.91) * 4.8 + Math.sin(shakeTime * 1.41) * 2.6;
 
-    // Center coordinates for tiny rotational jitter
+    // Center coordinates for rotational jitter around image center
     const cx = width / 2;
     const cy = height / 2;
-    const angleJitter = Math.sin(shakeTime * 0.45) * 0.024; // ~1.4 degrees rotational jitter (~2x)
+    // Tiny angular shake (~1.4 degrees)
+    const angleJitter = Math.sin(shakeTime * 0.45) * 0.024;
     const cosA = Math.cos(angleJitter);
     const sinA = Math.sin(angleJitter);
 
@@ -71,13 +73,14 @@ export class MovingRageMotionFilter implements BaseFilter {
 
         const edge = edges[jy * width + jx];
 
-        // Procedural anime energy turbulence equations creating organic white aura strokes
+        // 2. Procedural Anime Energy Turbulence:
+        // Superimposes sinusoidal waveforms to synthesize fluid lightning / electric aura around edges
         const n1 = Math.sin(jx * 0.07 + t * 2.3 + Math.cos(jy * 0.04 - t * 1.7));
         const n2 = Math.cos(jy * 0.09 - t * 2.9 + Math.sin(jx * 0.05 + t * 1.3));
         const n3 = Math.sin((jx + jy) * 0.12 - t * 3.5);
         const energyFlow = n1 * n2 + n3 * 0.5;
 
-        // Energy aura expands from structural edge boundaries
+        // Energy aura expands outward from structural edge contours
         const isNearEdge = edge > 22;
         const isStrongEdge = edge > 42; // Eyes, nose, mouth, fingers, jawline, clothing contours
 

@@ -49,7 +49,14 @@ export class QuadCompositor {
   }
 
   /**
-   * Composites camera frame with regional quadrilateral filter, preserving native aspect ratio.
+   * Main Compositing Pipeline:
+   * 1. Draws base camera stream to full canvas (handling aspect-ratio cover and mirror flip).
+   * 2. Computes the quadrilateral's bounding box to isolate the active region.
+   * 3. Extracts only that sub-region of pixel data (ImageData) for high performance.
+   * 4. Applies the active visual filter to the cropped pixels on an offscreen canvas.
+   * 5. Clips the main canvas using HTML5 Canvas 2D path (`mainCtx.clip()`) along P1-P2-P3-P4.
+   * 6. Draws the filtered offscreen canvas into the clipped polygon mask.
+   * 7. Renders dashed boundary lines and fingertip indicators.
    */
   public renderFrame(
     mainCtx: CanvasRenderingContext2D,
@@ -63,6 +70,7 @@ export class QuadCompositor {
     const videoWidth = videoElement.videoWidth || canvasWidth;
     const videoHeight = videoElement.videoHeight || canvasHeight;
 
+    // Calculate aspect ratio crop and centering offsets
     const { renderWidth, renderHeight, offsetX, offsetY } = this.getCoverBounds(
       videoWidth,
       videoHeight,
@@ -70,22 +78,22 @@ export class QuadCompositor {
       canvasHeight
     );
 
-    // Clear background
+    // Clear background to black
     mainCtx.fillStyle = '#000000';
     mainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     const isCutout = Boolean(activeFilter.isCutout || activeFilter.id === 'cutout');
 
     if (isCutout) {
-      // Cutout effect: Cardboard cutout illusion
-      // Everything OUTSIDE the HandFrame quadrilateral is pure black (#000000).
-      // Everything INSIDE the HandFrame quadrilateral shows the original camera image with natural colors.
+      // CUTOUT FILTER MODE (Cardboard cutout illusion):
+      // - Exterior of HandFrame remains pure black (#000000).
+      // - Interior of HandFrame shows the live camera view clipped to the quadrilateral.
       if (!quad) return;
 
       const bbox = QuadGeometry.getBoundingBox(quad, canvasWidth, canvasHeight);
       if (bbox.width <= 2 || bbox.height <= 2) return;
 
-      // Draw camera video strictly inside the clipped HandFrame quadrilateral
+      // Clip canvas to HandFrame quadrilateral polygon
       mainCtx.save();
       mainCtx.beginPath();
       mainCtx.moveTo(quad.P1.x, quad.P1.y);
@@ -93,8 +101,9 @@ export class QuadCompositor {
       mainCtx.lineTo(quad.P3.x, quad.P3.y);
       mainCtx.lineTo(quad.P4.x, quad.P4.y);
       mainCtx.closePath();
-      mainCtx.clip();
+      mainCtx.clip(); // Restricts all subsequent draw operations to inside the polygon
 
+      // Draw camera video strictly inside the clipped polygon
       if (isMirrored) {
         mainCtx.translate(canvasWidth, 0);
         mainCtx.scale(-1, 1);
@@ -104,12 +113,13 @@ export class QuadCompositor {
       }
       mainCtx.restore();
 
-      // Bounding guides & fingertip indicators
+      // Draw dashed boundaries & corner dots
       this.renderBoundingGuides(mainCtx, quad);
       return;
     }
 
-    // 1. Draw background video stream maintaining exact native aspect ratio without stretching
+    // STANDARD REGIONAL FILTER MODE:
+    // Step 1: Draw full camera feed in background
     mainCtx.save();
     if (isMirrored) {
       mainCtx.translate(canvasWidth, 0);
@@ -120,28 +130,30 @@ export class QuadCompositor {
     }
     mainCtx.restore();
 
+    // If hands are not detected, stop here (shows raw camera feed)
     if (!quad) return;
 
-    // 2. Compute bounding box around quadrilateral
+    // Step 2: Compute bounding box around quadrilateral
     const bbox = QuadGeometry.getBoundingBox(quad, canvasWidth, canvasHeight);
     if (bbox.width <= 2 || bbox.height <= 2) return;
 
-    // 3. Extract sub-region ImageData if not Original filter
+    // Step 3: Extract sub-region pixels and apply filter (skipped for "original" filter)
     if (activeFilter.id !== 'original') {
       try {
+        // Performance win: Read only the bounding box sub-region pixels (e.g. 300x300 instead of 1920x1080)
         const subImageData = mainCtx.getImageData(bbox.minX, bbox.minY, bbox.width, bbox.height);
 
-        // Apply active filter module
+        // Process pixels through filter algorithm (Sobel, color matrix, pixelate, etc.)
         const processedData = activeFilter.apply(subImageData);
 
-        // Resize offscreen canvas & put processed image
+        // Transfer filtered pixels onto offscreen canvas
         if (this.offscreenCanvas.width !== bbox.width || this.offscreenCanvas.height !== bbox.height) {
           this.offscreenCanvas.width = bbox.width;
           this.offscreenCanvas.height = bbox.height;
         }
         this.offscreenCtx.putImageData(processedData, 0, 0);
 
-        // 4. Clip main canvas to quadrilateral polygon path
+        // Step 4: Clip main canvas to the exact quadrilateral polygon
         mainCtx.save();
         mainCtx.beginPath();
         mainCtx.moveTo(quad.P1.x, quad.P1.y);
@@ -151,7 +163,7 @@ export class QuadCompositor {
         mainCtx.closePath();
         mainCtx.clip();
 
-        // 5. Draw filtered sub-image inside clipped polygon
+        // Step 5: Stamp the filtered offscreen canvas over the clipped polygon
         mainCtx.drawImage(this.offscreenCanvas, bbox.minX, bbox.minY);
         mainCtx.restore();
       } catch (err) {
@@ -159,7 +171,7 @@ export class QuadCompositor {
       }
     }
 
-    // 6. Draw subtle HandFrame bounding line & fingertip indicators
+    // Step 6: Render subtle dashed boundary lines and fingertip indicators
     this.renderBoundingGuides(mainCtx, quad);
   }
 

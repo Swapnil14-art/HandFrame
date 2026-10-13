@@ -27,21 +27,32 @@ export class CustomColorMatrixFilter implements BaseFilter {
     this.description = description;
   }
 
+  /**
+   * Applies a 3x3 Linear Color Transformation Matrix:
+   * Math:
+   * [R']   [a  b  c]   [R]   [rOffset]
+   * [G'] = [d  e  f] * [G] + [gOffset]
+   * [B']   [g  h  i]   [B]   [bOffset]
+   * Used for global color manipulation (sepia, color temperature, saturation, and channel swapping).
+   */
   public apply(imageData: ImageData): ImageData {
     const data = imageData.data;
     const len = data.length;
     const [a, b, c, d, e, f, g, h, i] = this.matrix;
     const [rOff, gOff, bOff] = this.offsets;
 
+    // Process every pixel's R, G, B channels (A channel left untouched)
     for (let idx = 0; idx < len; idx += 4) {
       const r = data[idx];
       const g = data[idx + 1];
       const b = data[idx + 2];
 
+      // Linear combinations of input channels + channel bias offsets
       const nr = a * r + b * g + c * b + rOff;
       const ng = d * r + e * g + f * b + gOff;
       const nb = g * r + h * g + i * b + bOff;
 
+      // Clamp output channels to valid 8-bit unsigned integer range [0, 255]
       data[idx] = nr < 0 ? 0 : nr > 255 ? 255 : nr;
       data[idx + 1] = ng < 0 ? 0 : ng > 255 ? 255 : ng;
       data[idx + 2] = nb < 0 ? 0 : nb > 255 ? 255 : nb;

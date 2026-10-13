@@ -15,7 +15,8 @@ export class QuadGeometry {
   private static filterInstance = new QuadOneEuroFilter();
 
   /**
-   * Smooths quadrilateral points using One Euro Filter or velocity-adaptive filter.
+   * Smooths quadrilateral points using the One Euro Filter.
+   * If tracking was just acquired (previous === null), resets filter history to prevent jumping.
    */
   public static smoothQuad(
     current: QuadPolygon,
@@ -35,7 +36,9 @@ export class QuadGeometry {
   }
 
   /**
-   * Calculates quadrilateral surface area using Shoelace formula.
+   * Calculates quadrilateral surface area in pixels using the Shoelace Formula (Gauss's Area Formula).
+   * Math: Area = 0.5 * |(x1*y2 + x2*y3 + x3*y4 + x4*y1) - (x2*y1 + x3*y2 + x4*y3 + x1*y4)|
+   * Used to measure frame size and detect collapsed pinch gestures.
    */
   public static getPolygonArea(quad: QuadPolygon): number {
     const { P1, P2, P3, P4 } = quad;
@@ -50,7 +53,9 @@ export class QuadGeometry {
   }
 
   /**
-   * Calculates bounding box around quadrilateral to define canvas sub-region bounds.
+   * Calculates Axis-Aligned Bounding Box (AABB) enclosing the quadrilateral.
+   * Purpose: Critical performance optimization. Instead of reading and filtering the entire 1080p canvas,
+   * we only extract and process the rectangular pixel sub-region containing the hand frame.
    */
   public static getBoundingBox(
     quad: QuadPolygon,
@@ -60,17 +65,19 @@ export class QuadGeometry {
     const xs = [quad.P1.x, quad.P2.x, quad.P3.x, quad.P4.x];
     const ys = [quad.P1.y, quad.P2.y, quad.P3.y, quad.P4.y];
 
+    // Find extreme coordinates containing all 4 fingertips
     let minX = Math.floor(Math.min(...xs));
     let minY = Math.floor(Math.min(...ys));
     let maxX = Math.ceil(Math.max(...xs));
     let maxY = Math.ceil(Math.max(...ys));
 
-    // Clamp to canvas boundaries
+    // Clamp coordinates to canvas boundaries to avoid out-of-bounds ImageData extraction errors
     minX = Math.max(0, minX);
     minY = Math.max(0, minY);
     maxX = Math.min(canvasWidth, maxX);
     maxY = Math.min(canvasHeight, maxY);
 
+    // Ensure dimensions are at least 1px wide/tall
     const width = Math.max(1, maxX - minX);
     const height = Math.max(1, maxY - minY);
 

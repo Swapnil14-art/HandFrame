@@ -51,10 +51,12 @@ export class HandTracker {
     this.isInitializing = true;
 
     try {
+      // Load WebAssembly (WASM) vision binaries from CDN
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
       );
 
+      // Attempt GPU delegate (WebGL) first for high framerates (30-60 FPS)
       this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
         baseOptions: {
           modelAssetPath:
@@ -62,7 +64,7 @@ export class HandTracker {
           delegate: 'GPU',
         },
         runningMode: 'VIDEO',
-        numHands: 2,
+        numHands: 2, // Track both left and right hands
         minHandDetectionConfidence: 0.45,
         minHandPresenceConfidence: 0.45,
         minTrackingConfidence: 0.45,
@@ -73,6 +75,7 @@ export class HandTracker {
     } catch (err) {
       console.warn('GPU delegate failed for HandLandmarker, attempting CPU fallback:', err);
       try {
+        // Fallback: Use CPU execution if client lacks WebGL / GPU support
         const vision = await FilesetResolver.forVisionTasks(
           'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
         );
@@ -105,8 +108,11 @@ export class HandTracker {
   }
 
   /**
-   * Detects 2 hands and extracts fingertips strictly in absolute semantic order:
-   * [LEFT_THUMB, LEFT_INDEX, RIGHT_INDEX, RIGHT_THUMB]
+   * Detects both hands and extracts 4 fingertips in strict semantic counter-clockwise order:
+   * P1: Left Thumb  (Landmark 4)
+   * P2: Left Index  (Landmark 8)
+   * P3: Right Index (Landmark 8)
+   * P4: Right Thumb (Landmark 4)
    */
   public detect(
     videoElement: HTMLVideoElement,
@@ -114,21 +120,26 @@ export class HandTracker {
     _isMirrored: boolean = false
   ): HandFramePoints | null {
     if (!this.handLandmarker || !this.isReady) return null;
-    if (videoElement.readyState < 2) return null;
+    if (videoElement.readyState < 2) return null; // Video must have enough data for current frame
 
+    // Compute delta time in seconds
     const dt = this.lastTimestamp > 0 ? Math.max(0.005, (timestamp - this.lastTimestamp) / 1000) : 0.033;
     this.lastTimestamp = timestamp;
 
     try {
+      // Run MediaPipe neural network inference on current video frame
       const results = this.handLandmarker.detectForVideo(videoElement, timestamp);
 
       const hasTwoHands = results && results.landmarks && results.landmarks.length >= 2;
 
       if (!hasTwoHands) {
-        // PREDICTIVE GRACE PERIOD: Extrapolate with damped velocity during short tracking drops
+        // PREDICTIVE GRACE PERIOD:
+        // If hand detection drops briefly (e.g. motion blur, quick occlusion, lighting change),
+        // we extrapolate fingertip positions using velocity vectors decayed by 0.82^n for up to 10 frames (~300ms).
+        // Prevents the canvas frame from abruptly blinking or collapsing.
         if (this.lastValidPoints && this.graceFramesCount < this.maxGraceFrames) {
           this.graceFramesCount++;
-          const decay = Math.pow(0.82, this.graceFramesCount);
+          const decay = Math.pow(0.82, this.graceFramesCount); // Exponential decay slows down movement
 
           const P1: Point2D = {
             x: Math.min(1, Math.max(0, this.lastValidPoints.P1.x + this.velocities.P1.vx * dt * decay)),
@@ -160,7 +171,7 @@ export class HandTracker {
           return predictedPoints;
         }
 
-        // Grace period expired
+        // Grace period expired: clear history and drop tracking
         this.resetHistory();
         return null;
       }
@@ -171,18 +182,17 @@ export class HandTracker {
       const h0Label = results.handednesses?.[0]?.[0]?.categoryName; // 'Right' or 'Left'
       const h1Label = results.handednesses?.[1]?.[0]?.categoryName; // 'Right' or 'Left'
 
+      // Assign Left Hand and Right Hand correctly, maintaining hand identity over time
       const { leftHand, rightHand } = this.assignHands(hand0, hand1, h0Label, h1Label);
 
-      // Confidence computation
+      // Confidence computation (average probability score)
       const score0 = results.handednesses?.[0]?.[0]?.score || 0.85;
       const score1 = results.handednesses?.[1]?.[0]?.score || 0.85;
       const confidence = (score0 + score1) / 2;
 
-      // MANDATORY ABSOLUTE SEMANTIC FINGERTIP ORDERING:
-      // P1: LEFT_THUMB  (landmark 4 of Left Hand)
-      // P2: LEFT_INDEX  (landmark 8 of Left Hand)
-      // P3: RIGHT_INDEX (landmark 8 of Right Hand)
-      // P4: RIGHT_THUMB (landmark 4 of Right Hand)
+      // Extract fingertips using MediaPipe 21-landmark topology:
+      // - Landmark 4 = Thumb Tip
+      // - Landmark 8 = Index Finger Tip
       const leftThumb: Point2D  = { x: leftHand[4].x,  y: leftHand[4].y };
       const leftIndex: Point2D  = { x: leftHand[8].x,  y: leftHand[8].y };
       const rightIndex: Point2D = { x: rightHand[8].x, y: rightHand[8].y };
@@ -242,8 +252,10 @@ export class HandTracker {
   }
 
   /**
-   * Assigns detected MediaPipe hands to Left Hand and Right Hand.
-   * Uses temporal palm center tracking to maintain identity when hands invert (rotate 180°).
+   * Disambiguates and assigns detected MediaPipe hands to physical Left Hand and Right Hand.
+   * Tricky issue solved: If hands cross or rotate upside-down, MediaPipe handedness labels flip erratically.
+   * Solution: We track the temporal position of Landmark 9 (middle finger MCP joint / palm center).
+   * By minimizing the sum of squared Euclidean distances to previous palm centers, hands never swap identities.
    */
   private assignHands(
     hand0: any[],
@@ -251,13 +263,17 @@ export class HandTracker {
     h0Label?: string,
     h1Label?: string
   ): { leftHand: any[]; rightHand: any[] } {
+    // Landmark 9 represents the middle finger knuckle (palm center)
     const h0Center = { x: hand0[9].x, y: hand0[9].y };
     const h1Center = { x: hand1[9].x, y: hand1[9].y };
 
     if (this.lastLeftCenter && this.lastRightCenter) {
+      // Hypothesis A: hand0 is Left, hand1 is Right
       const distA = this.distSq(h0Center, this.lastLeftCenter) + this.distSq(h1Center, this.lastRightCenter);
+      // Hypothesis B: hand1 is Left, hand0 is Right
       const distB = this.distSq(h1Center, this.lastLeftCenter) + this.distSq(h0Center, this.lastRightCenter);
 
+      // Pick hypothesis that minimizes motion displacement between frames
       if (distA <= distB) {
         this.lastLeftCenter = h0Center;
         this.lastRightCenter = h1Center;
@@ -273,6 +289,7 @@ export class HandTracker {
     let leftHand = hand0;
     let rightHand = hand1;
 
+    // Use MediaPipe's initial handedness labels if available
     if (h0Label === 'Left' && h1Label === 'Right') {
       leftHand = hand0;
       rightHand = hand1;
@@ -280,6 +297,7 @@ export class HandTracker {
       leftHand = hand1;
       rightHand = hand0;
     } else {
+      // Fallback: the hand further to the left (smaller X) is Left Hand
       if (h0Center.x < h1Center.x) {
         leftHand = hand0;
         rightHand = hand1;

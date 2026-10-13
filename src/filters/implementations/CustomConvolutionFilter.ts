@@ -37,17 +37,25 @@ export class CustomConvolutionFilter implements BaseFilter {
     }
   }
 
+  /**
+   * Applies a 2D spatial convolution matrix (3x3 or 5x5) over image pixels.
+   * Key concepts teachers ask about:
+   * 1. Kernel sliding: Moves a small matrix of weights over each pixel and its neighbors.
+   * 2. Sum of products: Each color channel (R, G, B) = sum(neighbor_pixel * kernel_weight).
+   * 3. Divisor: Normalizes kernel weights to maintain proper image brightness (prevents overexposure).
+   * 4. Border Clamping: Replicates edge pixels when kernel extends past image boundary.
+   */
   public apply(imageData: ImageData): ImageData {
     const width = imageData.width;
     const height = imageData.height;
     const srcData = imageData.data;
     const len = srcData.length;
 
-    // Buffer to hold processed destination pixels
+    // Buffer to hold processed destination pixels without mutating source during iteration
     const output = new Uint8ClampedArray(len);
 
     const kSize = this.kernelSize;
-    const halfK = Math.floor(kSize / 2);
+    const halfK = Math.floor(kSize / 2); // 1 for 3x3, 2 for 5x5
     const kernel = this.kernel;
     const divisor = this.divisor || 1;
     const offset = this.offset;
@@ -59,13 +67,15 @@ export class CustomConvolutionFilter implements BaseFilter {
         let bSum = 0;
 
         let kIdx = 0;
+        // Iterate over surrounding neighborhood
         for (let ky = -halfK; ky <= halfK; ky++) {
-          // CLAMP border strategy near image boundaries
+          // CLAMP border policy: keep coordinates inside [0, height-1]
           let pxY = y + ky;
           if (pxY < 0) pxY = 0;
           else if (pxY >= height) pxY = height - 1;
 
           for (let kx = -halfK; kx <= halfK; kx++) {
+            // CLAMP border policy: keep coordinates inside [0, width-1]
             let pxX = x + kx;
             if (pxX < 0) pxX = 0;
             else if (pxX >= width) pxX = width - 1;
@@ -80,6 +90,7 @@ export class CustomConvolutionFilter implements BaseFilter {
         }
 
         const dstIdx = (y * width + x) * 4;
+        // Normalize by divisor and add brightness offset (e.g. +128 for emboss)
         const nr = rSum / divisor + offset;
         const ng = gSum / divisor + offset;
         const nb = bSum / divisor + offset;
@@ -87,7 +98,7 @@ export class CustomConvolutionFilter implements BaseFilter {
         output[dstIdx] = nr < 0 ? 0 : nr > 255 ? 255 : nr;
         output[dstIdx + 1] = ng < 0 ? 0 : ng > 255 ? 255 : ng;
         output[dstIdx + 2] = nb < 0 ? 0 : nb > 255 ? 255 : nb;
-        output[dstIdx + 3] = srcData[dstIdx + 3]; // Retain alpha channel
+        output[dstIdx + 3] = srcData[dstIdx + 3]; // Preserve original alpha transparency
       }
     }
 

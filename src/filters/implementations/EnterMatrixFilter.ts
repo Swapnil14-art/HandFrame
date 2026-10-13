@@ -19,7 +19,7 @@ export class EnterMatrixFilter implements BaseFilter {
         let totalLum = 0;
         let count = 0;
 
-        // Sample 4x4 block luminance
+        // 1. Compute average luminance across 4x4 pixel block
         for (let py = 0; py < this.cellSize && y + py < height; py++) {
           for (let px = 0; px < this.cellSize && x + px < width; px++) {
             const idx = ((y + py) * width + (x + px)) * 4;
@@ -30,36 +30,35 @@ export class EnterMatrixFilter implements BaseFilter {
 
         const avgLum = count > 0 ? totalLum / count : 0;
 
-        // Determine green vs black tonal threshold based on original image luminance
-        // Dark areas (eyes, nose, hair, deep shadows) -> PURE BLACK
+        // 2. Synthesize Green Matrix Phosphor Dots:
         for (let py = 0; py < this.cellSize && y + py < height; py++) {
           for (let px = 0; px < this.cellSize && x + px < width; px++) {
             const outIdx = ((y + py) * width + (x + px)) * 4;
 
             if (avgLum < 65) {
-              // Dark facial features & shadows -> Pure Black
+              // Deep shadows, hair, and eyes remain Pitch Black (#000000) for high contrast
               outData[outIdx]     = 0;
               outData[outIdx + 1] = 0;
               outData[outIdx + 2] = 0;
             } else {
-              // Matrix dot pattern: center 2x2 dot inside 4x4 block
+              // Shape the phosphor dot: only fill the inner 2x2 pixels of the 4x4 block
               const isCenterDot = py >= 1 && py <= 2 && px >= 1 && px <= 2;
 
               if (isCenterDot) {
                 if (avgLum > 160) {
-                  // High highlights -> Bright Mint Neon Green Dot
+                  // High luminance highlights -> Glowing Neon Mint Green (#50FF8C)
                   outData[outIdx]     = 80;
                   outData[outIdx + 1] = 255;
                   outData[outIdx + 2] = 140;
                 } else {
-                  // Midtones -> Matrix Emerald Green Dot
+                  // Midtones -> Classic Matrix Emerald Green
                   const greenVal = Math.min(255, Math.round(110 + (avgLum - 65) * 1.2));
                   outData[outIdx]     = 0;
                   outData[outIdx + 1] = greenVal;
                   outData[outIdx + 2] = Math.round(greenVal * 0.25);
                 }
               } else {
-                // Cell gap margin -> Dark Green / Black grid outline
+                // Outer 1px perimeter gap between dots: dark border
                 outData[outIdx]     = 0;
                 outData[outIdx + 1] = avgLum > 180 ? 30 : 0;
                 outData[outIdx + 2] = 0;

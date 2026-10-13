@@ -14,8 +14,11 @@ export interface TransformationConfig {
 
 export class CoordinateTransformer {
   /**
-   * Transforms normalized MediaPipe landmark (0.0 to 1.0) to pixel canvas coordinates.
-   * Accounts for object-fit cover cropping and horizontal front-camera mirroring.
+   * Transforms normalized MediaPipe coordinates ([0.0, 1.0]) to exact HTML5 Canvas pixel coordinates.
+   * Solves two critical spatial alignment problems:
+   * 1. Horizontal mirroring: Front selfie camera is mirrored horizontally (x' = 1 - x).
+   * 2. Aspect-ratio mismatch: Webcams are usually 16:9 (1280x720) while browser windows vary.
+   *    Uses 'cover' scaling and crop offsets so video & hand landmarks align 1:1 on screen.
    */
   public static normalizedToCanvasPoint(
     normalizedPoint: Point2D,
@@ -23,17 +26,19 @@ export class CoordinateTransformer {
   ): Point2D {
     const { videoWidth, videoHeight, canvasWidth, canvasHeight, isMirrored, objectFit = 'cover' } = config;
 
+    // Guard against uninitialized dimensions (0 or negative)
     if (videoWidth <= 0 || videoHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
       return { x: 0, y: 0 };
     }
 
-    // 1. Account for horizontal mirror flipping on front camera
+    // 1. Mirror X-axis for front camera so the interface acts like a natural mirror
     let normX = normalizedPoint.x;
     if (isMirrored) {
       normX = 1.0 - normX;
     }
     const normY = normalizedPoint.y;
 
+    // Simple stretch (fill) without aspect ratio preservation
     if (objectFit === 'fill') {
       return {
         x: normX * canvasWidth,
@@ -41,7 +46,8 @@ export class CoordinateTransformer {
       };
     }
 
-    // Aspect ratio calculation for 'cover' (default)
+    // 2. Aspect Ratio Preserving Geometry (object-fit: cover):
+    // Compare canvas aspect ratio to native video aspect ratio
     const videoAspect = videoWidth / videoHeight;
     const canvasAspect = canvasWidth / canvasHeight;
 
@@ -52,26 +58,27 @@ export class CoordinateTransformer {
 
     if (objectFit === 'cover') {
       if (canvasAspect > videoAspect) {
-        // Canvas is wider than video -> scale by width, crop top/bottom
+        // Canvas is wider than video: scale video to match canvas width, crop excess top & bottom
         renderHeight = canvasWidth / videoAspect;
-        offsetY = (canvasHeight - renderHeight) / 2;
+        offsetY = (canvasHeight - renderHeight) / 2; // Center vertically
       } else {
-        // Canvas is taller than video -> scale by height, crop left/right
+        // Canvas is taller than video: scale video to match canvas height, crop excess left & right
         renderWidth = canvasHeight * videoAspect;
-        offsetX = (canvasWidth - renderWidth) / 2;
+        offsetX = (canvasWidth - renderWidth) / 2; // Center horizontally
       }
     } else if (objectFit === 'contain') {
       if (canvasAspect > videoAspect) {
-        // Scale by height, pillarbox left/right
+        // Pillarbox left/right black bars
         renderWidth = canvasHeight * videoAspect;
         offsetX = (canvasWidth - renderWidth) / 2;
       } else {
-        // Scale by width, letterbox top/bottom
+        // Letterbox top/bottom black bars
         renderHeight = canvasWidth / videoAspect;
         offsetY = (canvasHeight - renderHeight) / 2;
       }
     }
 
+    // 3. Project normalized coordinates to final pixel coordinates
     const pixelX = offsetX + normX * renderWidth;
     const pixelY = offsetY + normY * renderHeight;
 

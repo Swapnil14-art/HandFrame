@@ -12,7 +12,9 @@ export class RageShiftFilter implements BaseFilter {
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // Discrete state index switching every 100ms (10 times per second)
+    // Discrete Animation Driver:
+    // Cycles through 10 distinct visual impact treatments every 100ms (10 frames per second).
+    // Replicates classic hand-drawn anime 'impact frames' / rage shock flashes (Kill la Kill / Mob Psycho style).
     const stateIndex = Math.floor(Date.now() / 100) % 10;
     const len = data.length;
 

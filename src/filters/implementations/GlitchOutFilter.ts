@@ -12,10 +12,9 @@ export class GlitchOutFilter implements BaseFilter {
     const output = new ImageData(new Uint8ClampedArray(data), width, height);
     const outData = output.data;
 
-    // Time-based irregular state driver (~4-5 FPS switching, every 3rd state holds longer)
+    // 1. Time-based Irregular State Driver:
+    // Glitches look natural when timing is non-uniform: 2 fast pulses (260ms each) + 1 longer hold (480ms)
     const now = Date.now();
-    
-    // Cycle pattern: 260ms step 0, 260ms step 1, 480ms step 2 (hold state) -> Total cycle = 1000ms
     const cycleDuration = 1000;
     const cycleTime = now % cycleDuration;
     const cycleIndex = Math.floor(now / cycleDuration);
@@ -26,18 +25,18 @@ export class GlitchOutFilter implements BaseFilter {
     } else if (cycleTime < 520) {
       stepInCycle = 1;
     } else {
-      stepInCycle = 2; // Hold state (longer duration)
+      stepInCycle = 2; // Hold state: gives the viewer time to register the distortion
     }
 
     const stateStep = cycleIndex * 3 + stepInCycle;
 
-    // Deterministic pseudo-random hash for current state
+    // Fast deterministic pseudo-random hash function using sine fractional part
     const hash = (seed: number) => {
       const x = Math.sin(seed * 12.9898 + stateStep * 78.233) * 43758.5453;
       return x - Math.floor(x);
     };
 
-    // 1. Compute grayscale luminance buffer & Sobel edge buffer for edge outline detection
+    // 2. Grayscale & Sobel Edge Detection Pass
     const gray = new Float32Array(width * height);
     const edges = new Float32Array(width * height);
 
@@ -63,12 +62,8 @@ export class GlitchOutFilter implements BaseFilter {
       }
     }
 
-    // 2. Select Dynamic RGB-split Outline Mode across states
-    // State A: RED (left) <-> CYAN (right)
-    // State B: CYAN (left) <-> RED (right)
-    // State C: RED + BLUE displaced asymmetrically
-    // State D: MAGENTA / GREEN or BLUE offset
-    // State E: Opposite-side displacement
+    // 3. Dynamic Chromatic Aberration Offset Mode:
+    // Offsets the red, green, and blue edge channels in opposite directions to produce 3D color fringing
     const mode = Math.abs(stateStep) % 5;
     let rEdgeOffsetX = 0, rEdgeOffsetY = 0;
     let gEdgeOffsetX = 0, gEdgeOffsetY = 0;

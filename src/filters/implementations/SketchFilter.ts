@@ -41,29 +41,30 @@ export class SketchFilter implements BaseFilter {
         let paperG = 246;
         let paperB = 238;
 
-        // Subtle paper grain noise
+        // Deterministic high-frequency paper grain noise (simulates rough cellulose paper texture)
         const noise = ((x * 13 + y * 29) % 11) - 5;
         paperR = Math.min(255, Math.max(0, paperR + noise));
         paperG = Math.min(255, Math.max(0, paperG + noise));
         paperB = Math.min(255, Math.max(0, paperB + noise));
 
-        // Refined edge detection: ~30% increase in fine contour strokes (threshold 28)
+        // Dual-Tier Edge Rendering:
         if (edgeMag > 28) {
           if (edgeMag > 45) {
-            // Primary dark ink stroke for strong structural outlines (eyes, nose, lips, fingers, jawline)
+            // Tier 1: Bold black ink stroke for dominant contours (eyes, lips, fingers, silhouette)
             const inkIntensity = Math.min(210, Math.max(0, (edgeMag - 28) * 2.8));
             paperR = Math.max(18, paperR - inkIntensity);
             paperG = Math.max(18, paperG - inkIntensity);
             paperB = Math.max(22, paperB - inkIntensity * 0.9);
           } else {
-            // Secondary fine 2H pencil contour lines for subtle facial & object details (~30% detail boost)
+            // Tier 2: Fine 2H graphite pencil stroke for subtle anatomical/clothing details
             const pencilIntensity = Math.min(130, Math.max(0, (edgeMag - 28) * 2.2));
             paperR = Math.max(45, paperR - pencilIntensity);
             paperG = Math.max(42, paperG - pencilIntensity);
             paperB = Math.max(48, paperB - pencilIntensity * 0.85);
           }
         } else if (lum < 110) {
-          // Soft pencil cross-hatch shading in shadow & midtone transition regions
+          // Cross-hatch shading in shadow regions:
+          // Creates diagonal 45-degree hatch lines using modular arithmetic (x ± y) % 4 === 0
           const hatchPattern = (x + y) % 4 === 0 || (x - y) % 4 === 0;
           if (hatchPattern) {
             const shadeVal = Math.round((110 - lum) * 1.1);

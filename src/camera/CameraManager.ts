@@ -32,8 +32,8 @@ export class CameraManager {
   private videoElement: HTMLVideoElement | null = null;
 
   /**
-   * Initializes camera stream on target HTML5 video element.
-   * Enforces standard W3C Secure Context requirements for navigator.mediaDevices.getUserMedia().
+   * Initializes WebRTC camera stream and mounts it to an HTML5 <video> element.
+   * Handles browser autoplay policies, secure context checks, and hardware fallbacks.
    */
   public async startCamera(
     videoElement: HTMLVideoElement,
@@ -42,17 +42,17 @@ export class CameraManager {
     this.videoElement = videoElement;
     this.currentFacingMode = preferredFacingMode;
 
-    // Ensure required mobile Safari & Chrome inline autoplay attributes
+    // Mobile Safari & Chrome require playsinline & muted for programmatic autoplay without user prompt
     videoElement.setAttribute('playsinline', 'true');
     videoElement.setAttribute('muted', 'true');
     videoElement.setAttribute('autoplay', 'true');
     videoElement.playsInline = true;
     videoElement.muted = true;
 
-    // Stop existing stream if active
+    // Release any previously running camera stream to prevent device lock
     this.stopCamera();
 
-    // 1. Validate browser support for navigator.mediaDevices
+    // 1. Check if browser supports WebRTC mediaDevices API
     if (!navigator?.mediaDevices) {
       throw new CameraError(
         'UNSUPPORTED_BROWSER',
@@ -60,7 +60,8 @@ export class CameraManager {
       );
     }
 
-    // 2. Validate Secure Context (HTTPS or localhost)
+    // 2. Validate Secure Context (W3C standard):
+    // Browsers block camera access over plain HTTP (e.g. 192.168.x.x) for privacy. Only HTTPS and localhost are permitted.
     const isLocalhost =
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1' ||
@@ -81,9 +82,11 @@ export class CameraManager {
       );
     }
 
-    // Progressive Constraint Levels to prevent OverconstrainedError on Mobile & Desktop
+    // 3. Progressive Constraint Fallback:
+    // If strict constraints (720p resolution) fail on budget hardware, progressively degrade constraints
+    // rather than throwing an OverconstrainedError.
     const constraintLevels: MediaStreamConstraints[] = [
-      // Level 1: Mobile-optimized ideal resolution & facing mode
+      // Level 1: Mobile-optimized 720p ideal resolution + requested facing mode
       {
         audio: false,
         video: {
@@ -92,14 +95,14 @@ export class CameraManager {
           height: { ideal: 720 },
         },
       },
-      // Level 2: Simple facing mode constraint
+      // Level 2: Simple facing mode constraint without resolution constraints
       {
         audio: false,
         video: {
           facingMode: preferredFacingMode,
         },
       },
-      // Level 3: Basic video stream fallback
+      // Level 3: Bare minimum video stream fallback (any camera resolution available)
       {
         audio: false,
         video: true,
@@ -109,6 +112,7 @@ export class CameraManager {
     let lastError: any = null;
     let stream: MediaStream | null = null;
 
+    // Try constraints in order of preference until one succeeds
     for (const constraints of constraintLevels) {
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);

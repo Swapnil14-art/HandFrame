@@ -15,6 +15,11 @@ export class SpectralMapFilter implements BaseFilter {
     this.buildLUT();
   }
 
+  /**
+   * Precomputes a 256-entry Look-Up Table (LUT) mapping each grayscale luminance (0..255)
+   * to an HSL spectral rainbow color (0 deg Red to 300 deg Magenta).
+   * Key Optimization: Eliminates expensive per-pixel trigonometric/float HSL conversions during rendering.
+   */
   private buildLUT(): void {
     for (let i = 0; i < 256; i++) {
       const hue = (i / 255) * 300; // 0 (Red) to 300 (Magenta)
@@ -50,6 +55,9 @@ export class SpectralMapFilter implements BaseFilter {
     return p;
   }
 
+  /**
+   * Applies spectral map using O(1) table lookups.
+   */
   public apply(imageData: ImageData): ImageData {
     const { data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), imageData.width, imageData.height);
@@ -61,8 +69,10 @@ export class SpectralMapFilter implements BaseFilter {
       const g = data[i + 1];
       const b = data[i + 2];
 
+      // Calculate perceptual luminance
       const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
 
+      // O(1) Instant Table Lookup: fetches precomputed RGB values
       outData[i]     = this.lutR[lum];
       outData[i + 1] = this.lutG[lum];
       outData[i + 2] = this.lutB[lum];

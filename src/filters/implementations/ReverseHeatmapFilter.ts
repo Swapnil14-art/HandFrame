@@ -15,6 +15,14 @@ export class ReverseHeatmapFilter implements BaseFilter {
     this.buildReverseThermalLUT();
   }
 
+  /**
+   * Precomputes a 3-segment piecewise thermal color gradient Look-Up Table (LUT):
+   * Inverts luminance (val = 255 - lum) so bright regions map to warm yellow/white
+   * and dark regions map to cool blue/violet.
+   * - Segment 1 [0..84]: Deep Blue to Magenta
+   * - Segment 2 [85..169]: Magenta to Red/Orange
+   * - Segment 3 [170..255]: Orange to Bright Yellow/White
+   */
   private buildReverseThermalLUT(): void {
     // Reverse thermal gradient: Low lum -> White/Yellow, Mid -> Red/Magenta, High -> Deep Blue/Violet
     for (let i = 0; i < 256; i++) {
@@ -46,6 +54,9 @@ export class ReverseHeatmapFilter implements BaseFilter {
     }
   }
 
+  /**
+   * Applies reverse heatmap in O(1) time per pixel.
+   */
   public apply(imageData: ImageData): ImageData {
     const { data } = imageData;
     const output = new ImageData(new Uint8ClampedArray(data), imageData.width, imageData.height);
@@ -53,8 +64,10 @@ export class ReverseHeatmapFilter implements BaseFilter {
 
     const len = data.length;
     for (let i = 0; i < len; i += 4) {
+      // Calculate perceptual luminance
       const lum = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
 
+      // O(1) Instant Table Lookup
       outData[i]     = this.lutR[lum];
       outData[i + 1] = this.lutG[lum];
       outData[i + 2] = this.lutB[lum];
