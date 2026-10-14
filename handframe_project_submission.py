@@ -3,11 +3,7 @@ import mediapipe as mp
 import numpy as np
 
 def main():
-    """
-    Main execution pipeline for the HandFrame Python submission.
-    Captures live webcam video, detects hands using MediaPipe, and maps visual filters into the dynamic hand frame.
-    """
-    # 1. Initialize MediaPipe Hands detector to track up to two hands simultaneously
+    # Initialize MediaPipe Hands (open-source cross-platform framework for running real-time, on-device machine learning and computer vision pipelines)
     mp_hands = mp.solutions.hands
     mp_drawing = mp.solutions.drawing_utils
     hands = mp_hands.Hands(
