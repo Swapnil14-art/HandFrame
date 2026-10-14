@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 
 def main():
-    # Initialize MediaPipe Hands
+    # Initialize MediaPipe Hands (open-source cross-platform framework for running real-time, on-device machine learning and computer vision pipelines)
     mp_hands = mp.solutions.hands
     mp_drawing = mp.solutions.drawing_utils
     hands = mp_hands.Hands(
@@ -13,7 +13,7 @@ def main():
         min_tracking_confidence=0.5
     )
 
-    # Initialize Webcam Capture
+    # Initialize Primary Webcam Capture
     cap = cv2.VideoCapture(0)
 
     print("Starting HandFrame Python Implementation...")
