@@ -5,9 +5,15 @@ interface ToastNotificationProps {
   onClear: () => void;
 }
 
+/**
+ * ToastNotification Component:
+ * Displays transient, non-intrusive HUD notifications (e.g. filter name upon gesture trigger,
+ * snapshot capture confirmation, or countdown timer status) centered at the top of the viewport.
+ */
 export const ToastNotification: React.FC<ToastNotificationProps> = ({ message, onClear }) => {
   const [visible, setVisible] = useState(false);
 
+  // Auto-dismisses the toast notification after 1400ms duration
   useEffect(() => {
     if (message) {
       setVisible(true);
@@ -16,6 +22,7 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({ message, o
         onClear();
       }, 1400);
 
+      // Clean up timer on unmount or when message changes rapidly
       return () => clearTimeout(timer);
     }
   }, [message, onClear]);

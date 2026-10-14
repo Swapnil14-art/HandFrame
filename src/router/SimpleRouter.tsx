@@ -56,11 +56,14 @@ export const SimpleRouter: React.FC = () => {
     }
   };
 
+  // Render the view corresponding to the active route
   switch (currentRoute) {
     case 'camera':
+      // Live camera feed with 4-point hand tracking, filter compositor, and HUD
       return <CameraView onBackToLanding={() => navigateTo('landing')} />;
 
     case 'unlisted-editor':
+      // Developer / secret editor route for designing custom matrix & convolution filters
       return (
         <UnlistedFilterEditor
           onLaunchCamera={() => navigateTo('camera')}
@@ -70,6 +73,7 @@ export const SimpleRouter: React.FC = () => {
 
     case 'landing':
     default:
+      // Hero onboarding page requesting user gesture before triggering camera permissions
       return <LandingPage onStartCamera={() => navigateTo('camera')} />;
   }
 };

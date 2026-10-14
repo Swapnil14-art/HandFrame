@@ -5,13 +5,18 @@ interface LandingPageProps {
   onStartCamera: () => void;
 }
 
+/**
+ * LandingPage Component:
+ * Provides user-gesture entry point required by browsers before invoking WebRTC getUserMedia().
+ * Introduces key features: zero server upload privacy, 4-point tracking, and pinch filter cycle.
+ */
 export const LandingPage: React.FC<LandingPageProps> = ({ onStartCamera }) => {
   return (
     <div className="relative w-screen h-dvh bg-black text-white flex flex-col justify-between p-6 md:p-12 overflow-hidden select-none">
       {/* Background Subtle Gradient Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-zinc-800/20 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Top Bar Header */}
+      {/* Top Bar Header with live indicator & version pill */}
       <header className="relative z-10 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
@@ -40,7 +45,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartCamera }) => {
           Track four physical fingertips to construct a dynamic, real-time visual quadrilateral camera frame with atmospheric image filters.
         </p>
 
-        {/* Primary Action Button */}
+        {/* Primary Action Button: triggers camera initialization and transitions to CameraView */}
         <button
           onClick={onStartCamera}
           className="group relative inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-semibold text-sm rounded-full shadow-2xl hover:bg-white/90 active:scale-95 transition-all duration-200"
@@ -50,7 +55,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartCamera }) => {
         </button>
       </main>
 
-      {/* Footer Features */}
+      {/* Footer Feature Callouts: Highlights local processing, tracking geometry, and gesture interaction */}
       <footer className="relative z-10 border-t border-white/10 pt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-center md:text-left max-w-4xl mx-auto w-full">
         <div className="flex items-center justify-center md:justify-start gap-3">
           <ShieldCheck className="w-4 h-4 text-white/50 shrink-0" />

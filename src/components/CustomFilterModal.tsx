@@ -44,27 +44,34 @@ const CONVOLUTION_PRESETS = [
   },
 ];
 
+/**
+ * CustomFilterModal Component:
+ * Interactive visual designer modal allowing users to construct, test, and register custom
+ * 3x3 color transformation matrices and 3x3/5x5 spatial convolution kernels with live canvas previews.
+ */
 export const CustomFilterModal: React.FC<CustomFilterModalProps> = ({
   isOpen,
   onClose,
   onCreateFilter,
 }) => {
+  // Modal form state: filter title, mode switch (Color Matrix vs Convolution Kernel)
   const [filterName, setFilterName] = useState('My Custom Matrix');
   const [filterType, setFilterType] = useState<'COLOR_MATRIX' | 'CONVOLUTION'>('COLOR_MATRIX');
 
-  // Color matrix state (3x3 + 3 offsets)
+  // Color matrix state (3x3 linear color coefficients + 3 RGB brightness bias offsets)
   const [matrix, setMatrix] = useState<number[]>([1, 0, 0, 0, 1, 0, 0, 0, 1]);
   const [offsets, setOffsets] = useState<number[]>([0, 0, 0]);
 
-  // Convolution state (3x3 or 5x5)
+  // Spatial convolution state (3x3 or 5x5 kernel weights, divisor scalar, and brightness bias)
   const [kernelSize, setKernelSize] = useState<3 | 5>(3);
   const [kernel, setKernel] = useState<number[]>([0, -1, 0, -1, 5, -1, 0, -1, 0]);
   const [divisor, setDivisor] = useState<number>(1);
   const [convOffset, setConvOffset] = useState<number>(0);
 
+  // Reference to real-time HTML5 preview canvas
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Generate test pattern on preview canvas
+  // Re-renders the test pattern through the active filter settings on state change
   useEffect(() => {
     if (!isOpen) return;
     renderPreview();

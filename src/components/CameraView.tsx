@@ -31,10 +31,17 @@ interface CameraViewProps {
   onBackToLanding: () => void;
 }
 
+/**
+ * CameraView Component:
+ * Core interactive view managing real-time webcam feed, MediaPipe hand tracking inference,
+ * temporal smoothing with One Euro Filter, pinch gesture detection, and canvas filter compositing.
+ */
 export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
+  // DOM References: invisible HTML5 video stream and visible presentation canvas
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Engine lifecycle states: loading status, user-facing error dialogs, and active UI modes
   const [isLoading, setIsLoading] = useState(true);
   const [loadingText, setLoadingText] = useState('Initializing HandFrame Engine...');
   const [errorDetails, setErrorDetails] = useState<{
@@ -398,21 +405,25 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     scheduleNextFrame();
   };
 
+  // Advances to next filter module in the session sequence
   function handleManualNextFilter() {
     const next = sessionStoreRef.current.nextFilter();
     setToastMessage(next.displayName);
   }
 
+  // Regresses to previous filter module in the session sequence
   function handleManualPreviousFilter() {
     const prev = sessionStoreRef.current.previousFilter();
     setToastMessage(prev.displayName);
   }
 
+  // Encodes canvas pixels into a full-resolution PNG image and triggers automatic browser download
   function executeCapture() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     try {
+      // Trigger white flash animation overlay for camera shutter feedback
       setIsFlashing(true);
       setTimeout(() => setIsFlashing(false), 200);
 
@@ -429,6 +440,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     }
   }
 
+  // Initiates 3-second countdown timer before taking picture, allowing user to pose hand frame
   function handleTakeSnapshot() {
     // If countdown timer is already active, clicking or pressing 'S' cancels it
     if (countdownIntervalRef.current) {
@@ -457,6 +469,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     }, 1000);
   }
 
+  // Toggles between front user selfie camera and rear environment camera
   const handleSwitchCamera = async () => {
     if (!videoRef.current) return;
     try {
@@ -470,6 +483,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onBackToLanding }) => {
     }
   };
 
+  // Enters or exits HTML5 Fullscreen mode for distraction-free presentation
   const toggleFullscreen = async () => {
     try {
       if (!document.fullscreenElement) {
